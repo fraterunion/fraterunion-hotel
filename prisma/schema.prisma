@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum HotelStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  HOTEL_ADMIN
+  RECEPTION_STAFF
+  FINANCE_STAFF
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum RoomTypeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  OUT_OF_SERVICE
+}
+
+enum ReservationSource {
+  DIRECT_WEB
+  MANUAL_ADMIN
+  PHONE
+  WALK_IN
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  MANUAL
+}
+
+enum PaymentMethod {
+  CARD
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum FeeType {
+  FIXED
+  PERCENTAGE
+}
+
+model Hotel {
+  id            String          @id @default(cuid())
+  name          String
+  slug          String          @unique
+  legalName     String?
+  email         String?
+  phone         String?
+  website       String?
+  timezone      String          @default("America/Mexico_City")
+  currency      String          @default("MXN")
+  status        HotelStatus     @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  settings      HotelSettings?
+  users         User[]
+  roomTypes     RoomType[]
+  rooms         Room[]
+  guests        Guest[]
+  reservations  Reservation[]
+  payments      Payment[]
+  auditLogs     AuditLog[]
+
+  @@index([slug])
+  @@map("hotels")
+}
+
+model HotelSettings {
+  id                 String    @id @default(cuid())
+  hotelId            String    @unique
+  logoUrl            String?
+  heroTitle          String?
+  heroSubtitle       String?
+  aboutText          String?
+  addressLine1       String?
+  addressLine2       String?
+  city               String?
+  state              String?
+  country            String?
+  postalCode         String?
+  checkInTime        String?
+  checkOutTime       String?
+  taxPercentage      Decimal   @db.Decimal(5, 2) @default(0.00)
+  serviceFeeType     FeeType?
+  serviceFeeValue    Decimal?  @db.Decimal(10, 2)
+  cancellationPolicy String?
+  houseRules         String?
+  contactEmail       String?
+  contactPhone       String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  hotel              Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@map("hotel_settings")
+}
+
+model User {
+  id            String      @id @default(cuid())
+  hotelId       String
+  firstName     String
+  lastName      String
+  email         String      @unique
+  passwordHash  String
+  role          UserRole
+  status        UserStatus  @default(ACTIVE)
+  lastLoginAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  hotel         Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  auditLogs     AuditLog[]
+
+  @@index([hotelId])
+  @@index([email])
+  @@map("users")
+}
+
+model RoomType {
+  id                String             @id @default(cuid())
+  hotelId           String
+  name              String
+  slug              String
+  description       String?
+  basePrice         Decimal            @db.Decimal(10, 2)
+  capacityAdults    Int                @default(2)
+  capacityChildren  Int                @default(0)
+  bedType           String?
+  sizeM2            Int?
+  status            RoomTypeStatus     @default(ACTIVE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  hotel             Hotel              @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  images            RoomTypeImage[]
+  amenities         RoomTypeAmenity[]
+  rooms             Room[]
+  reservations      Reservation[]
+
+  @@unique([hotelId, slug])
+  @@index([hotelId])
+  @@map("room_types")
+}
+
+model RoomTypeImage {
+  id          String    @id @default(cuid())
+  roomTypeId  String
+  url         String
+  altText     String?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  roomType    RoomType  @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@index([roomTypeId])
+  @@map("room_type_images")
+}
+
+model RoomTypeAmenity {
+  id          String    @id @default(cuid())
+  roomTypeId  String
+  name        String
+  icon        String?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  roomType    RoomType  @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@index([roomTypeId])
+  @@map("room_type_amenities")
+}
+
+model Room {
+  id            String      @id @default(cuid())
+  hotelId       String
+  roomTypeId    String
+  roomNumber    String
+  floor         String?
+  status        RoomStatus  @default(AVAILABLE)
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  hotel         Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomType      RoomType    @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  reservations  Reservation[] @relation("AssignedRoomReservations")
+
+  @@unique([hotelId, roomNumber])
+  @@index([hotelId])
+  @@index([roomTypeId])
+  @@map("rooms")
+}
+
+model Guest {
+  id            String         @id @default(cuid())
+  hotelId       String
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String?
+  country       String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  hotel         Hotel          @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  reservations  Reservation[]
+
+  @@index([hotelId])
+  @@index([email])
+  @@index([phone])
+  @@map("guests")
+}
+
+model Reservation {
+  id               String              @id @default(cuid())
+  hotelId          String
+  guestId          String
+  roomTypeId       String
+  assignedRoomId   String?
+  reservationCode  String              @unique
+  source           ReservationSource   @default(DIRECT_WEB)
+  status           ReservationStatus   @default(PENDING)
+  checkInDate      DateTime
+  checkOutDate     DateTime
+  adults           Int                 @default(1)
+  children         Int                 @default(0)
+  nights           Int
+  baseAmount       Decimal             @db.Decimal(10, 2)
+  taxAmount        Decimal             @db.Decimal(10, 2) @default(0.00)
+  feesAmount       Decimal             @db.Decimal(10, 2) @default(0.00)
+  discountAmount   Decimal             @db.Decimal(10, 2) @default(0.00)
+  totalAmount      Decimal             @db.Decimal(10, 2)
+  amountPaid       Decimal             @db.Decimal(10, 2) @default(0.00)
+  paymentStatus    PaymentStatus       @default(PENDING)
+  specialRequests  String?
+  internalNotes    String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  hotel            Hotel               @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  guest            Guest               @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  roomType         RoomType            @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  assignedRoom     Room?               @relation("AssignedRoomReservations", fields: [assignedRoomId], references: [id], onDelete: SetNull)
+  payments         Payment[]
+
+  @@index([hotelId])
+  @@index([guestId])
+  @@index([roomTypeId])
+  @@index([assignedRoomId])
+  @@index([checkInDate, checkOutDate])
+  @@index([status])
+  @@map("reservations")
+}
+
+model Payment {
+  id                 String               @id @default(cuid())
+  hotelId            String
+  reservationId      String
+  provider           PaymentProvider
+  providerPaymentId  String?
+  providerSessionId  String?
+  amount             Decimal              @db.Decimal(10, 2)
+  currency           String
+  status             PaymentRecordStatus  @default(PENDING)
+  method             PaymentMethod?
+  paidAt             DateTime?
+  metadata           Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  hotel              Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  reservation        Reservation          @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId])
+  @@index([reservationId])
+  @@index([providerSessionId])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  hotelId     String
+  userId      String?
+  entityType  String
+  entityId    String
+  action      String
+  beforeJson  Json?
+  afterJson   Json?
+  createdAt   DateTime  @default(now())
+
+  hotel       Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([hotelId])
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
