@@ -23,7 +23,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isValidPassword = await bcrypt.compare(dto.password, user.passwordHash);
+    const isValidPassword = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
 
     if (!isValidPassword) {
       throw new UnauthorizedException('Invalid credentials');
@@ -37,6 +40,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tenantId: user.tenantId,
       hotelId: user.hotelId,
     };
 
@@ -51,6 +55,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         status: user.status,
+        tenantId: user.tenantId,
         hotelId: user.hotelId,
         hotel: user.hotel
           ? {
@@ -73,6 +78,7 @@ export class AuthService {
         email: true,
         role: true,
         status: true,
+        tenantId: true,
         hotelId: true,
       },
     });

@@ -84,8 +84,29 @@ enum FeeType {
   PERCENTAGE
 }
 
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Tenant {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  status      TenantStatus  @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  users       User[]
+  hotels      Hotel[]
+
+  @@index([slug])
+  @@map("tenants")
+}
+
 model Hotel {
   id            String          @id @default(cuid())
+  tenantId      String
   name          String
   slug          String          @unique
   legalName     String?
@@ -98,6 +119,7 @@ model Hotel {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   settings      HotelSettings?
   users         User[]
   roomTypes     RoomType[]
@@ -107,6 +129,7 @@ model Hotel {
   payments      Payment[]
   auditLogs     AuditLog[]
 
+  @@index([tenantId])
   @@index([slug])
   @@map("hotels")
 }
@@ -143,7 +166,8 @@ model HotelSettings {
 
 model User {
   id            String      @id @default(cuid())
-  hotelId       String
+  tenantId      String
+  hotelId       String?
   firstName     String
   lastName      String
   email         String      @unique
@@ -154,9 +178,11 @@ model User {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  hotel         Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hotel         Hotel?      @relation(fields: [hotelId], references: [id], onDelete: SetNull)
   auditLogs     AuditLog[]
 
+  @@index([tenantId])
   @@index([hotelId])
   @@index([email])
   @@map("users")

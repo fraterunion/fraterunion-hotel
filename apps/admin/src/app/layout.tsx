@@ -1,6 +1,19 @@
-export const metadata = { title: 'FraterUnion Hotel Admin', description: 'Hotel admin dashboard' };
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+import './globals.css';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'FraterUnion Admin',
+  description: 'FraterUnion Hotel Admin Panel',
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en"><body style={{ fontFamily: 'Arial, sans-serif', margin: 0, padding: 24 }}>{children}</body></html>
+    <html lang="en">
+      <body>{children}</body>
+    </html>
   );
 }

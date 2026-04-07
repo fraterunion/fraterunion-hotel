@@ -7,17 +7,13 @@ import { AuthService } from '../auth.service';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    configService: ConfigService,
+    private readonly configService: ConfigService,
     private readonly authService: AuthService,
   ) {
-    const jwtSecret =
-      configService.get<string>('JWT_ACCESS_SECRET') ||
-      'super_access_secret_change_me';
-
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwtSecret,
+      secretOrKey: configService.get<string>('JWT_ACCESS_SECRET')!,
     });
   }
 
@@ -25,7 +21,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     sub: string;
     email: string;
     role: string;
-    hotelId: string;
+    tenantId: string;
+    hotelId?: string | null;
   }) {
     const user = await this.authService.validateUserById(payload.sub);
 
@@ -33,6 +30,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
-    return user;
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      hotelId: user.hotelId,
+    };
   }
 }

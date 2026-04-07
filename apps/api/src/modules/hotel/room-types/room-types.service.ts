@@ -12,9 +12,18 @@ import { RoomTypeStatus } from '@prisma/client';
 export class RoomTypesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(hotelId: string) {
+  async findAll(tenantId: string, hotelId?: string | null) {
+    if (!hotelId) {
+      throw new NotFoundException('Hotel context not found');
+    }
+
     return this.prisma.roomType.findMany({
-      where: { hotelId },
+      where: {
+        hotelId,
+        hotel: {
+          tenantId,
+        },
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         amenities: true,
@@ -23,9 +32,19 @@ export class RoomTypesService {
     });
   }
 
-  async findOne(hotelId: string, id: string) {
+  async findOne(tenantId: string, hotelId: string | null | undefined, id: string) {
+    if (!hotelId) {
+      throw new NotFoundException('Hotel context not found');
+    }
+
     const roomType = await this.prisma.roomType.findFirst({
-      where: { id, hotelId },
+      where: {
+        id,
+        hotelId,
+        hotel: {
+          tenantId,
+        },
+      },
       include: {
         amenities: true,
         images: true,
@@ -39,12 +58,33 @@ export class RoomTypesService {
     return roomType;
   }
 
-  async create(hotelId: string, dto: CreateRoomTypeDto) {
-    const existing = await this.prisma.roomType.findUnique({
+  async create(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    dto: CreateRoomTypeDto,
+  ) {
+    if (!hotelId) {
+      throw new NotFoundException('Hotel context not found');
+    }
+
+    const hotel = await this.prisma.hotel.findFirst({
       where: {
-        hotelId_slug: {
-          hotelId,
-          slug: dto.slug,
+        id: hotelId,
+        tenantId,
+      },
+      select: { id: true },
+    });
+
+    if (!hotel) {
+      throw new NotFoundException('Hotel not found for tenant');
+    }
+
+    const existing = await this.prisma.roomType.findFirst({
+      where: {
+        hotelId,
+        slug: dto.slug,
+        hotel: {
+          tenantId,
         },
       },
     });
@@ -69,9 +109,24 @@ export class RoomTypesService {
     });
   }
 
-  async update(hotelId: string, id: string, dto: UpdateRoomTypeDto) {
+  async update(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    id: string,
+    dto: UpdateRoomTypeDto,
+  ) {
+    if (!hotelId) {
+      throw new NotFoundException('Hotel context not found');
+    }
+
     const existing = await this.prisma.roomType.findFirst({
-      where: { id, hotelId },
+      where: {
+        id,
+        hotelId,
+        hotel: {
+          tenantId,
+        },
+      },
     });
 
     if (!existing) {
@@ -79,11 +134,12 @@ export class RoomTypesService {
     }
 
     if (dto.slug && dto.slug !== existing.slug) {
-      const slugTaken = await this.prisma.roomType.findUnique({
+      const slugTaken = await this.prisma.roomType.findFirst({
         where: {
-          hotelId_slug: {
-            hotelId,
-            slug: dto.slug,
+          hotelId,
+          slug: dto.slug,
+          hotel: {
+            tenantId,
           },
         },
       });
@@ -108,9 +164,23 @@ export class RoomTypesService {
     });
   }
 
-  async remove(hotelId: string, id: string) {
+  async remove(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    id: string,
+  ) {
+    if (!hotelId) {
+      throw new NotFoundException('Hotel context not found');
+    }
+
     const existing = await this.prisma.roomType.findFirst({
-      where: { id, hotelId },
+      where: {
+        id,
+        hotelId,
+        hotel: {
+          tenantId,
+        },
+      },
     });
 
     if (!existing) {

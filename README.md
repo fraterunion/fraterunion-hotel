@@ -49,3 +49,39 @@ Starter monorepo for **FraterUnion Hotel V1**.
 - password: ChangeMe123!
 
 Update this before using in any real environment.
+
+## Cars arbitrage MVP (Phase 1)
+
+This repo now includes a minimal cars-arbitrage MVP:
+- API ingestion endpoint: `POST /api/cars/ingest`
+- Opportunities endpoint: `GET /api/cars/opportunities`
+- Telegram alerts for listings priced at `<= 85%` of cohort median
+- Python worker in `apps/ingestion-worker` for Segundamano + Mercado Libre polling
+
+### Extra environment variables
+
+Add these to `.env` for alerts:
+
+```bash
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
+
+### Run MVP flow
+
+1. Start infra and API:
+   ```bash
+   docker compose up -d
+   pnpm install
+   pnpm db:generate
+   pnpm db:migrate
+   pnpm --filter @fraterunion/api dev
+   ```
+2. In another terminal, run worker:
+   ```bash
+   cd apps/ingestion-worker
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   python main.py
+   ```
