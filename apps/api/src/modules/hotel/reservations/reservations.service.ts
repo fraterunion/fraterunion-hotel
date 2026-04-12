@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -15,6 +16,8 @@ import { EmailService } from '../../core/email/email.service';
 
 @Injectable()
 export class ReservationsService {
+  private readonly logger = new Logger(ReservationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
@@ -224,6 +227,10 @@ export class ReservationsService {
         },
       },
     });
+
+    this.logger.log(
+      `[StripeFlow] Public reservation created id=${reservation.id} reservationCode=${reservation.reservationCode} status=${reservation.status} paymentStatus=${reservation.paymentStatus} — checkout-session must use this reservationId`,
+    );
 
     await this.emailService.sendReservationCreatedEmail({
       to: reservation.guest.email || dto.email,

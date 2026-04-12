@@ -1,5 +1,6 @@
 'use client';
 
+import { hotelConfig } from '@fraterunion/config';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -7,7 +8,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/a
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@casafrater.com');
+  const [email, setEmail] = useState('admin@hotelos.com');
   const [password, setPassword] = useState('ChangeMe123!');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,8 +21,9 @@ export default function LoginPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: new Blob([JSON.stringify({ email, password })], {
+          type: 'application/json',
+        }),
       });
 
       const data = await response.json();
@@ -46,7 +48,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-neutral-200 p-8">
         <div className="mb-8">
           <p className="text-sm uppercase tracking-[0.2em] text-neutral-500">
-            FraterUnion Hotel
+            {hotelConfig.hotelShortName}
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-neutral-900">
             Admin Login

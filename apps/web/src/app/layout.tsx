@@ -1,9 +1,10 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { hotelConfig } from '@fraterunion/config';
 
 export const metadata: Metadata = {
-  title: 'FraterUnion Hotel',
-  description: 'FraterUnion Hotel Booking Experience',
+  title: `${hotelConfig.hotelShortName} · Reservas`,
+  description: hotelConfig.heroSubtitle,
 };
 
 export default function RootLayout({
@@ -12,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es-MX">
       <body>{children}</body>
     </html>
   );

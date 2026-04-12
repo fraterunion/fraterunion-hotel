@@ -7,9 +7,16 @@ async function bootstrap() {
     rawBody: true,
   });
 
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://www.losvagones.mx',
+    'https://admin.losvagones.mx',
+  ];
+
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    credentials: false,
+    origin: allowedOrigins,
+    credentials: true,
   });
 
   app.setGlobalPrefix('api');
@@ -21,8 +28,9 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(4000);
-  console.log('API running on http://localhost:4000/api');
+  const port = process.env.PORT || 4000;
+  await app.listen(port);
+  console.log(`API running on port ${port} (/api)`);
 }
 
 bootstrap();

@@ -1,9 +1,27 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.js";
 
 :root {
   color-scheme: light;
+  /* Cabin / boutique forest palette (booking + web shell) */
+  --cabin-bg: #f1ebe0;
+  --cabin-bg-deep: #e8e0d4;
+  --cabin-cream: #faf6ee;
+  --cabin-parchment: #f7f2e8;
+  --cabin-elevated: #fffdf8;
+  --cabin-ink: #3a342c;
+  --cabin-ink-soft: #5c5349;
+  --cabin-ink-faint: #8a8177;
+  --cabin-forest: #2f4a3d;
+  --cabin-forest-deep: #243830;
+  --cabin-forest-muted: #4a6356;
+  --cabin-olive: #5f6b4e;
+  --cabin-olive-soft: #e4e8dc;
+  --cabin-terra: #c0593d;
+  --cabin-terra-hover: #a34a32;
+  --cabin-border: rgba(58, 52, 44, 0.09);
+  --cabin-border-soft: rgba(58, 52, 44, 0.05);
+  --cabin-shadow: rgba(45, 38, 32, 0.07);
 }
 
 html,
@@ -19,8 +37,8 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  background: #f5f5f5;
-  color: #171717;
+  background: var(--cabin-bg);
+  color: var(--cabin-ink);
 }
 
 * {

@@ -7,8 +7,19 @@ export async function apiFetch<T>(
   const token =
     typeof window !== 'undefined' ? localStorage.getItem('fu_admin_token') : null;
 
+  const method = (options.method || 'GET').toUpperCase();
   const headers = new Headers(options.headers || {});
-  headers.set('Content-Type', 'application/json');
+
+  let body: BodyInit | null | undefined = options.body;
+  if (
+    body != null &&
+    typeof body === 'string' &&
+    method !== 'GET' &&
+    method !== 'HEAD'
+  ) {
+    headers.delete('Content-Type');
+    body = new Blob([body], { type: 'application/json' });
+  }
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -16,6 +27,7 @@ export async function apiFetch<T>(
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
+    body,
     headers,
   });
 

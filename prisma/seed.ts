@@ -17,12 +17,12 @@ async function main() {
   const hotel = await prisma.hotel.create({
     data: {
       tenantId: tenant.id,
-      name: 'Hotel Boutique Demo',
-      slug: 'hotel-boutique-demo',
-      legalName: 'Hotel Boutique Demo SA de CV',
-      email: 'admin@hotel.com',
-      phone: '+52 5555555555',
-      website: 'https://hotel.com',
+      name: 'Los Vagones',
+      slug: 'los-vagones',
+      legalName: 'Los Vagones',
+      email: 'losvagonesmex@gmail.com',
+      phone: '+52 55 8284 3604',
+      website: 'https://losvagones.example',
       timezone: 'America/Mexico_City',
       currency: 'MXN',
       status: HotelStatus.ACTIVE,
