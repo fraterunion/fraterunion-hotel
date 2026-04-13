@@ -2,6 +2,10 @@
   "name": "fraterunion-hotel",
   "private": true,
   "packageManager": "pnpm@10.5.2",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10.5.2"
+  },
   "scripts": {
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",

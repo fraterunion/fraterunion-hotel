@@ -2,26 +2,28 @@
   "name": "@fraterunion/web",
   "version": "0.0.1",
   "private": true,
+  "packageManager": "pnpm@10.5.2",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "start": "next start",
     "lint": "echo lint web",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@fraterunion/config": "workspace:*",
+    "@tailwindcss/postcss": "^4.2.2",
     "next": "^15.2.2",
+    "postcss": "^8.5.8",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "autoprefixer": "^10.4.27",
-    "postcss": "^8.5.8",
-    "tailwindcss": "^4.2.2",
     "typescript": "^5.8.2"
   }
 }
