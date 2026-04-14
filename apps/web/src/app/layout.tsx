@@ -1,17 +1,12 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { hotelConfig } from '@fraterunion/config';
 
 export const metadata: Metadata = {
-  title: `${hotelConfig.hotelShortName} · Reservas`,
-  description: hotelConfig.heroSubtitle,
+  title: 'Los Vagones',
+  description: 'Los Vagones',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es-MX">
       <body>{children}</body>
