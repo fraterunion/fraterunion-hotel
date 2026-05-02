@@ -77,9 +77,7 @@ type ReservationResponse = {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-/** Hero & room card imagery (Unsplash — cabin / forest mood, editorial use). */
-const HERO_BG_IMAGE =
-  'https://images.unsplash.com/photo-1449158743715-0a90ebb615d2?auto=format&fit=crop&w=2400&q=80';
+const HERO_BG_IMAGE = '/images/los-vagones-hero.jpg';
 
 const ROOM_CARD_IMAGES = [
   'https://images.unsplash.com/photo-1449158743715-0a90ebb615d2?auto=format&fit=crop&w=1400&q=80',
@@ -157,15 +155,15 @@ export default function BookingPage() {
       : null;
 
   const fieldClass =
-    'w-full rounded-2xl border-0 bg-[var(--cabin-parchment)] px-4 py-3.5 text-sm text-[var(--cabin-ink)] shadow-inner shadow-[var(--cabin-shadow)] outline-none ring-1 ring-[var(--cabin-border)] transition placeholder:text-[var(--cabin-ink-faint)] focus:bg-[var(--cabin-elevated)] focus:ring-2 focus:ring-[var(--cabin-forest)]/20';
+    'w-full rounded-xl border-0 bg-[var(--cabin-elevated)] px-4 py-3.5 text-sm text-[var(--cabin-ink)] outline-none ring-1 ring-[var(--cabin-border)] transition placeholder:text-[var(--cabin-ink-faint)] focus:bg-white focus:ring-2 focus:ring-[var(--cabin-forest)]/25';
 
   const btnPrimaryBase =
-    'inline-flex min-h-14 items-center justify-center rounded-2xl bg-[var(--cabin-terra)] px-6 text-base font-semibold tracking-wide text-[var(--cabin-elevated)] shadow-[0_10px_30px_rgba(176,68,48,0.35)] transition-all duration-200 ease-out hover:-translate-y-px hover:scale-[1.02] hover:bg-[var(--cabin-terra-hover)] hover:shadow-[0_18px_50px_rgba(176,68,48,0.45)] active:translate-y-0 active:scale-100 disabled:pointer-events-none disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-[0_10px_30px_rgba(176,68,48,0.35)]';
+    'inline-flex min-h-[52px] items-center justify-center rounded-full bg-[var(--cabin-terra)] px-8 text-sm font-semibold tracking-wide text-[var(--lv-cream)] shadow-[0_10px_32px_rgba(176,68,48,0.40)] transition-all duration-200 ease-out hover:scale-[1.02] hover:bg-[var(--cabin-terra-hover)] hover:shadow-[0_18px_52px_rgba(176,68,48,0.52)] active:scale-100 disabled:pointer-events-none disabled:opacity-45 disabled:hover:scale-100 disabled:hover:shadow-[0_10px_32px_rgba(176,68,48,0.40)]';
 
   const btnPrimary = `w-full ${btnPrimaryBase}`;
 
   const btnSecondary =
-    'inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-[var(--cabin-forest)]/22 bg-[var(--cabin-elevated)]/70 px-5 text-sm font-medium text-[var(--cabin-forest-deep)] shadow-sm shadow-[var(--cabin-shadow)] transition duration-200 hover:-translate-y-px hover:bg-[var(--cabin-olive-soft)]/85 hover:shadow-md';
+    'inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[var(--cabin-forest-deep)]/25 bg-transparent px-6 text-sm font-medium tracking-wide text-[var(--cabin-forest-deep)] transition-all duration-200 hover:border-[var(--cabin-forest-deep)]/45 hover:bg-[var(--cabin-forest-deep)]/6';
 
   async function handleSearch(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -264,58 +262,56 @@ export default function BookingPage() {
   }
 
   const labelClass =
-    'mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--cabin-olive)]';
+    'mb-2.5 block text-[10px] font-semibold uppercase tracking-[0.20em] text-[var(--cabin-olive)]';
 
   return (
-    <main className="min-h-screen bg-transparent text-[var(--cabin-ink)] antialiased">
-      {/* Hero con imagen y velos cálidos */}
-      <header className="relative overflow-hidden text-[var(--cabin-ink)]">
+    <main className="min-h-screen bg-[var(--cabin-bg)] text-[var(--cabin-ink)] antialiased">
+      {/* Hero — dark cinematic */}
+      <header className="relative overflow-hidden">
         <div
           className="absolute inset-0 scale-105 bg-cover bg-center"
           style={{ backgroundImage: `url(${HERO_BG_IMAGE})` }}
           aria-hidden
         />
+        {/* Dark cinematic overlays */}
         <div
-          className="absolute inset-0 bg-gradient-to-br from-[#f7f1e8]/94 via-[#e8ebe3]/91 to-[#d5e0d8]/89"
+          className="absolute inset-0 bg-gradient-to-t from-[var(--lv-dark)]/95 via-[var(--lv-dark)]/50 to-[var(--lv-dark)]/22"
           aria-hidden
         />
         <div
-          className="absolute inset-0 bg-[var(--cabin-forest)]/16 mix-blend-multiply"
-          aria-hidden
-        />
-        <div
-          className="absolute inset-0 bg-gradient-to-t from-[var(--cabin-bg)]/55 via-transparent to-[#faf8f3]/30"
+          className="absolute inset-0 bg-gradient-to-r from-[var(--lv-dark)]/35 via-transparent to-transparent"
           aria-hidden
         />
         <div className="relative z-10 mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-forest-deep)]/85 drop-shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[var(--cabin-terra)]">
             {hotelConfig.hotelName} · {hotelLocationLine()}
           </p>
-          <h1 className="mt-6 max-w-4xl text-4xl font-semibold leading-[1.1] tracking-tight text-[var(--cabin-forest-deep)] drop-shadow-[0_1px_2px_rgba(255,255,255,0.45)] sm:text-5xl lg:text-[3.2rem]">
+          <h1 className="mt-6 max-w-4xl text-4xl font-light leading-[1.08] tracking-tight text-[var(--lv-cream)] sm:text-5xl lg:text-[3.2rem]">
             {hotelConfig.heroTitle}
           </h1>
-          <p className="mt-7 max-w-2xl text-base leading-relaxed text-[var(--cabin-ink)]/88 sm:text-lg">
+          <p className="mt-7 max-w-2xl text-base leading-relaxed text-[var(--lv-cream)]/65 sm:text-lg">
             {hotelConfig.heroSubtitle}
           </p>
-          <p className="mt-5 text-sm text-[var(--cabin-ink-soft)]">{hotelLocationFull()}</p>
+          <p className="mt-5 text-sm text-[var(--lv-cream)]/45">{hotelLocationFull()}</p>
           <div className="mt-12 flex flex-wrap gap-3">
-            <span className="inline-flex items-center rounded-full bg-[var(--cabin-elevated)]/90 px-4 py-2.5 text-xs font-medium text-[var(--cabin-ink)] shadow-[0_4px_20px_rgba(45,38,32,0.06)] ring-1 ring-[var(--cabin-border)] backdrop-blur-md">
+            <span className="inline-flex items-center rounded-full border border-white/14 bg-white/7 px-4 py-2.5 text-xs font-medium text-[var(--lv-cream)]/80 backdrop-blur-sm">
               {bookingCopy.hero.checkIn} {hotelConfig.checkInTime}
             </span>
-            <span className="inline-flex items-center rounded-full bg-[var(--cabin-elevated)]/90 px-4 py-2.5 text-xs font-medium text-[var(--cabin-ink)] shadow-[0_4px_20px_rgba(45,38,32,0.06)] ring-1 ring-[var(--cabin-border)] backdrop-blur-md">
+            <span className="inline-flex items-center rounded-full border border-white/14 bg-white/7 px-4 py-2.5 text-xs font-medium text-[var(--lv-cream)]/80 backdrop-blur-sm">
               {bookingCopy.hero.checkOut} {hotelConfig.checkOutTime}
             </span>
-            <span className="inline-flex max-w-full items-center rounded-full bg-[var(--cabin-elevated)]/90 px-4 py-2.5 text-xs font-medium text-[var(--cabin-ink-soft)] shadow-[0_4px_20px_rgba(45,38,32,0.06)] ring-1 ring-[var(--cabin-border)] backdrop-blur-md">
+            <span className="inline-flex max-w-full items-center rounded-full border border-white/14 bg-white/7 px-4 py-2.5 text-xs font-medium text-[var(--lv-cream)]/55 backdrop-blur-sm">
               {hotelConfig.address}
             </span>
-            <span className="inline-flex max-w-full items-center rounded-full bg-[var(--cabin-olive-soft)]/95 px-4 py-2.5 text-xs font-medium text-[var(--cabin-olive)] ring-1 ring-[var(--cabin-border)] backdrop-blur-md">
+            <span className="inline-flex max-w-full items-center rounded-full border border-[var(--cabin-terra)]/35 bg-[var(--cabin-terra)]/14 px-4 py-2.5 text-xs font-medium text-[var(--cabin-terra)] backdrop-blur-sm">
               {hotelConfig.locationReference}
             </span>
           </div>
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl border-t border-[var(--cabin-border)] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+      <section className="bg-[var(--cabin-bg)] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+        <div className="mx-auto max-w-7xl">
         {error ? (
           <div
             className="mb-10 rounded-2xl border border-red-200/60 bg-red-50/80 px-6 py-4 text-sm font-medium text-red-900/90 shadow-md shadow-red-900/[0.04]"
@@ -866,6 +862,7 @@ export default function BookingPage() {
             </div>
           )
         )}
+        </div>
       </section>
     </main>
   );

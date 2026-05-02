@@ -22,6 +22,9 @@
   --cabin-border: rgba(30, 24, 18, 0.18);
   --cabin-border-soft: rgba(40, 32, 24, 0.07);
   --cabin-shadow: rgba(20, 16, 12, 0.14);
+  /* Luxury cinematic tokens */
+  --lv-dark: #0a1410;
+  --lv-cream: #ede0cc;
 }
 
 html,
