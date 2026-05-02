@@ -10,6 +10,7 @@ async function bootstrap() {
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
+    'https://losvagones.mx',
     'https://www.losvagones.mx',
     'https://admin.losvagones.mx',
   ];
@@ -29,7 +30,7 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 4000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`API running on port ${port} (/api)`);
 }
 
