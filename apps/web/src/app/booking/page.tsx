@@ -160,7 +160,7 @@ export default function BookingPage() {
     'w-full rounded-2xl border-0 bg-[var(--cabin-parchment)] px-4 py-3.5 text-sm text-[var(--cabin-ink)] shadow-inner shadow-[var(--cabin-shadow)] outline-none ring-1 ring-[var(--cabin-border)] transition placeholder:text-[var(--cabin-ink-faint)] focus:bg-[var(--cabin-elevated)] focus:ring-2 focus:ring-[var(--cabin-forest)]/20';
 
   const btnPrimaryBase =
-    'inline-flex min-h-14 items-center justify-center rounded-2xl bg-[var(--cabin-terra)] px-6 text-base font-semibold tracking-wide text-[var(--cabin-elevated)] shadow-[0_6px_22px_rgba(192,89,61,0.2)] transition duration-200 hover:-translate-y-px hover:bg-[var(--cabin-terra-hover)] hover:shadow-[0_14px_38px_rgba(192,89,61,0.28)] active:translate-y-0 disabled:pointer-events-none disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-[0_6px_22px_rgba(192,89,61,0.2)]';
+    'inline-flex min-h-14 items-center justify-center rounded-2xl bg-[var(--cabin-terra)] px-6 text-base font-semibold tracking-wide text-[var(--cabin-elevated)] shadow-[0_10px_30px_rgba(176,68,48,0.35)] transition-all duration-200 ease-out hover:-translate-y-px hover:scale-[1.02] hover:bg-[var(--cabin-terra-hover)] hover:shadow-[0_18px_50px_rgba(176,68,48,0.45)] active:translate-y-0 active:scale-100 disabled:pointer-events-none disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-[0_10px_30px_rgba(176,68,48,0.35)]';
 
   const btnPrimary = `w-full ${btnPrimaryBase}`;
 
@@ -267,7 +267,7 @@ export default function BookingPage() {
     'mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--cabin-olive)]';
 
   return (
-    <main className="min-h-screen bg-[var(--cabin-bg)] text-[var(--cabin-ink)] antialiased">
+    <main className="min-h-screen bg-transparent text-[var(--cabin-ink)] antialiased">
       {/* Hero con imagen y velos cálidos */}
       <header className="relative overflow-hidden text-[var(--cabin-ink)]">
         <div
@@ -315,7 +315,7 @@ export default function BookingPage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+      <section className="mx-auto max-w-7xl border-t border-[var(--cabin-border)] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
         {error ? (
           <div
             className="mb-10 rounded-2xl border border-red-200/60 bg-red-50/80 px-6 py-4 text-sm font-medium text-red-900/90 shadow-md shadow-red-900/[0.04]"
@@ -329,7 +329,7 @@ export default function BookingPage() {
           <div className="grid items-start gap-14 lg:grid-cols-[minmax(0,1fr)_min(100%,400px)] lg:gap-16 xl:grid-cols-[minmax(0,1fr)_420px]">
             <div className="min-w-0 space-y-16 lg:space-y-20">
               {/* Fechas: tarjeta única; hotelSlug solo en estado para la API */}
-              <section className="rounded-2xl bg-[var(--cabin-cream)] p-8 shadow-[0_10px_36px_rgba(45,38,32,0.055)] ring-1 ring-[var(--cabin-border-soft)] sm:p-10">
+              <section className="rounded-2xl bg-[var(--cabin-cream)] p-8 shadow-[0_12px_40px_rgba(0,0,0,0.12)] ring-1 ring-[var(--cabin-border-soft)] sm:p-10">
                 <div className="flex flex-col gap-2 border-b border-[var(--cabin-border)] pb-8 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h2 className="text-2xl font-semibold tracking-tight text-[var(--cabin-forest-deep)] sm:text-3xl">
@@ -378,7 +378,7 @@ export default function BookingPage() {
               </section>
 
               {/* Tipos de habitación */}
-              <section className="rounded-2xl bg-[var(--cabin-cream)] p-8 shadow-[0_10px_36px_rgba(45,38,32,0.055)] ring-1 ring-[var(--cabin-border-soft)] sm:p-10">
+              <section className="rounded-2xl bg-[var(--cabin-cream)] p-8 shadow-[0_12px_40px_rgba(0,0,0,0.12)] ring-1 ring-[var(--cabin-border-soft)] sm:p-10">
                 <div className="flex flex-col gap-5 border-b border-[var(--cabin-border)] pb-8 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h2 className="text-2xl font-semibold tracking-tight text-[var(--cabin-forest-deep)] sm:text-3xl">
@@ -492,7 +492,7 @@ export default function BookingPage() {
               {step === 'reserve' && selectedRoomType ? (
                 <section
                   id="guest-details"
-                  className="scroll-mt-28 rounded-2xl bg-[var(--cabin-cream)] p-8 shadow-[0_10px_36px_rgba(45,38,32,0.055)] ring-1 ring-[var(--cabin-border-soft)] sm:p-10"
+                  className="scroll-mt-28 rounded-2xl bg-[var(--cabin-cream)] p-8 shadow-[0_12px_40px_rgba(0,0,0,0.12)] ring-1 ring-[var(--cabin-border-soft)] sm:p-10"
                 >
                   <h2 className="text-2xl font-semibold tracking-tight text-[var(--cabin-forest-deep)] sm:text-3xl">
                     {bookingCopy.guest.title}
@@ -612,7 +612,7 @@ export default function BookingPage() {
             </div>
 
             <aside className="lg:sticky lg:top-8">
-              <div className="rounded-2xl bg-[var(--cabin-parchment)] p-8 text-[var(--cabin-ink)] shadow-[0_12px_40px_rgba(45,38,32,0.06)] ring-1 ring-[var(--cabin-border-soft)] sm:p-9">
+              <div className="rounded-2xl bg-[var(--cabin-parchment)] p-8 text-[var(--cabin-ink)] shadow-[0_12px_40px_rgba(0,0,0,0.12)] ring-1 ring-[var(--cabin-border-soft)] sm:p-9">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--cabin-olive)]">
                   {bookingCopy.summary.eyebrow}
                 </p>
@@ -715,7 +715,7 @@ export default function BookingPage() {
           </div>
         ) : (
           reservationResult && (
-            <div className="mx-auto max-w-3xl overflow-hidden rounded-2xl bg-[var(--cabin-cream)] shadow-[0_14px_48px_rgba(45,38,32,0.06)] ring-1 ring-[var(--cabin-border-soft)]">
+            <div className="mx-auto max-w-3xl overflow-hidden rounded-2xl bg-[var(--cabin-cream)] shadow-[0_12px_40px_rgba(0,0,0,0.12)] ring-1 ring-[var(--cabin-border-soft)]">
               <div className="h-1.5 w-full bg-gradient-to-r from-[var(--cabin-forest)] via-[var(--cabin-terra)]/70 to-[var(--cabin-olive)]/80" />
               <div className="p-8 sm:p-12">
               <div className="inline-flex rounded-full bg-[var(--cabin-forest)]/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--cabin-forest-deep)] ring-1 ring-[var(--cabin-forest)]/20">
