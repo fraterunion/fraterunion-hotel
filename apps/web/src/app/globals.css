@@ -4,24 +4,24 @@
 :root {
   color-scheme: light;
   /* Cabin / boutique forest palette (booking + web shell) */
-  --cabin-bg: #f1ebe0;
-  --cabin-bg-deep: #e8e0d4;
-  --cabin-cream: #faf6ee;
-  --cabin-parchment: #f7f2e8;
-  --cabin-elevated: #fffdf8;
-  --cabin-ink: #3a342c;
-  --cabin-ink-soft: #5c5349;
-  --cabin-ink-faint: #8a8177;
-  --cabin-forest: #2f4a3d;
-  --cabin-forest-deep: #243830;
-  --cabin-forest-muted: #4a6356;
-  --cabin-olive: #5f6b4e;
-  --cabin-olive-soft: #e4e8dc;
-  --cabin-terra: #c0593d;
-  --cabin-terra-hover: #a34a32;
-  --cabin-border: rgba(58, 52, 44, 0.09);
-  --cabin-border-soft: rgba(58, 52, 44, 0.05);
-  --cabin-shadow: rgba(45, 38, 32, 0.07);
+  --cabin-bg: #ede6d6;
+  --cabin-bg-deep: #e4dcc8;
+  --cabin-cream: #f8f2e6;
+  --cabin-parchment: #f2ece0;
+  --cabin-elevated: #fffef8;
+  --cabin-ink: #1c1813;
+  --cabin-ink-soft: #453c30;
+  --cabin-ink-faint: #7a6f62;
+  --cabin-forest: #264038;
+  --cabin-forest-deep: #1f3328;
+  --cabin-forest-muted: #3e5748;
+  --cabin-olive: #516040;
+  --cabin-olive-soft: #dde3d5;
+  --cabin-terra: #b04430;
+  --cabin-terra-hover: #8a3020;
+  --cabin-border: rgba(40, 32, 24, 0.13);
+  --cabin-border-soft: rgba(40, 32, 24, 0.07);
+  --cabin-shadow: rgba(28, 22, 16, 0.10);
 }
 
 html,
