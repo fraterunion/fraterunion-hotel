@@ -4,14 +4,10 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { hotelConfig } from '@fraterunion/config';
-import {
-  bookingCopy,
-  formatGuestsLine,
-  reservationStatusEs,
-} from '../../../content/booking-es';
+import { bookingCopy, reservationStatusEs } from '../../../content/booking-es';
 
 type Amenity = { name: string };
-type Image = { url: string; altText: string | null };
+type CabinImage = { url: string; altText: string | null };
 
 type CabinType = {
   id: string;
@@ -23,7 +19,7 @@ type CabinType = {
   capacityChildren: number;
   bedType: string | null;
   sizeM2: number | null;
-  images: Image[];
+  images: CabinImage[];
   amenities: Amenity[];
 };
 
@@ -46,17 +42,20 @@ type Step = 'dates' | 'reserve' | 'success';
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-const CABIN_FALLBACK: Record<string, string> = {
-  'casa-grande': '/images/los-vagones-hero.jpg',
-  girasoles: '/images/los-vagones-hero.jpg',
-  alcatraces: '/images/los-vagones-hero.jpg',
-  'cabana-del-aguila': '/images/los-vagones-hero.jpg',
-  'vagon-el-colorado': '/images/los-vagones-hero.jpg',
-  'cabana-del-pozo': '/images/los-vagones-hero.jpg',
+// Static gallery paths — drop real photos into /public/images/cabins/{slug}/
+// and update these arrays. DB images (cabin.images) take priority automatically.
+const CABIN_GALLERY: Record<string, string[]> = {
+  'casa-grande': ['/images/los-vagones-hero.jpg'],
+  girasoles: ['/images/los-vagones-hero.jpg'],
+  alcatraces: ['/images/los-vagones-hero.jpg'],
+  'cabana-del-aguila': ['/images/los-vagones-hero.jpg'],
+  'vagon-el-colorado': ['/images/los-vagones-hero.jpg'],
+  'cabana-del-pozo': ['/images/los-vagones-hero.jpg'],
 };
 
-function cabinImage(slug: string, images: Image[]): string {
-  return images[0]?.url ?? CABIN_FALLBACK[slug] ?? '/images/los-vagones-hero.jpg';
+function getCabinGallery(slug: string, images: CabinImage[]): string[] {
+  if (images.length > 0) return images.map((img) => img.url);
+  return CABIN_GALLERY[slug] ?? ['/images/los-vagones-hero.jpg'];
 }
 
 function formatCurrency(value: string | number) {
@@ -92,13 +91,20 @@ function tomorrowStr(): string {
   return d.toISOString().slice(0, 10);
 }
 
-const inputCls =
-  'w-full rounded-xl border border-[var(--cabin-border)] bg-[var(--cabin-bg)] px-4 py-3 text-sm text-[var(--cabin-ink)] placeholder-[var(--cabin-ink-faint)] outline-none ring-0 transition focus:border-[var(--cabin-forest)] focus:ring-2 focus:ring-[var(--cabin-forest)]/20';
+function defaultCheckout(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 2);
+  return d.toISOString().slice(0, 10);
+}
 
-const labelCls = 'block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)] mb-1.5';
+const inputCls =
+  'w-full rounded-xl border border-[var(--cabin-border)] bg-[var(--cabin-bg)] px-4 py-3.5 text-sm text-[var(--cabin-ink)] placeholder-[var(--cabin-ink-faint)] outline-none transition focus:border-[var(--cabin-forest)] focus:ring-2 focus:ring-[var(--cabin-forest)]/20';
+
+const labelCls =
+  'block text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--cabin-ink-faint)] mb-2';
 
 const btnPrimary =
-  'inline-flex w-full min-h-[52px] items-center justify-center rounded-2xl bg-[var(--cabin-terra)] px-8 text-sm font-semibold tracking-wide text-[var(--cabin-elevated)] shadow-[0_6px_22px_rgba(192,89,61,0.18)] transition duration-200 hover:-translate-y-px hover:bg-[var(--cabin-terra-hover)] hover:shadow-[0_14px_38px_rgba(192,89,61,0.26)] active:translate-y-0 disabled:opacity-50 disabled:pointer-events-none';
+  'inline-flex w-full min-h-[56px] items-center justify-center rounded-2xl bg-[var(--cabin-terra)] px-8 text-sm font-semibold tracking-wide text-[var(--cabin-elevated)] shadow-[0_6px_22px_rgba(192,89,61,0.2)] transition duration-200 hover:-translate-y-px hover:bg-[var(--cabin-terra-hover)] hover:shadow-[0_16px_40px_rgba(192,89,61,0.28)] active:translate-y-0 disabled:opacity-50 disabled:pointer-events-none';
 
 export default function CabinDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -107,20 +113,20 @@ export default function CabinDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [loadingCabin, setLoadingCabin] = useState(true);
 
-  // Booking state machine
+  // Gallery state
+  const [selectedImage, setSelectedImage] = useState('');
+  const [imgFadingOut, setImgFadingOut] = useState(false);
+
+  // Booking step
   const [step, setStep] = useState<Step>('dates');
 
-  // Dates step
+  // Dates
   const [checkIn, setCheckIn] = useState(tomorrowStr());
-  const [checkOut, setCheckOut] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 2);
-    return d.toISOString().slice(0, 10);
-  });
+  const [checkOut, setCheckOut] = useState(defaultCheckout());
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState('');
 
-  // Reserve step
+  // Guest fields
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -132,8 +138,10 @@ export default function CabinDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [reserveError, setReserveError] = useState('');
 
-  // Success step
-  const [reservation, setReservation] = useState<ReservationResult | null>(null);
+  // Payment
+  const [reservation, setReservation] = useState<ReservationResult | null>(
+    null,
+  );
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
 
@@ -150,6 +158,7 @@ export default function CabinDetailPage() {
           setNotFound(true);
         } else {
           setCabin(found);
+          setSelectedImage(getCabinGallery(found.slug, found.images)[0]);
         }
       } catch {
         setNotFound(true);
@@ -159,6 +168,15 @@ export default function CabinDetailPage() {
     }
     load();
   }, [slug]);
+
+  function selectThumbnail(src: string) {
+    if (src === selectedImage) return;
+    setImgFadingOut(true);
+    setTimeout(() => {
+      setSelectedImage(src);
+      setImgFadingOut(false);
+    }, 180);
+  }
 
   async function handleCheckAvailability(e: React.FormEvent) {
     e.preventDefault();
@@ -232,11 +250,14 @@ export default function CabinDetailPage() {
     setPaying(true);
     setPayError('');
     try {
-      const res = await fetch(`${API_BASE_URL}/public/payments/checkout-session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reservationId: reservation.id }),
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/public/payments/checkout-session`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reservationId: reservation.id }),
+        },
+      );
       if (!res.ok) throw new Error();
       const data = await res.json();
       window.location.href = data.checkoutUrl;
@@ -247,21 +268,27 @@ export default function CabinDetailPage() {
   }
 
   const nights = nightsBetween(checkIn, checkOut);
-  const estimatedTotal = cabin ? Number(cabin.basePrice) * Math.max(nights, 1) : 0;
+  const estimatedTotal = cabin
+    ? Number(cabin.basePrice) * Math.max(nights, 1)
+    : 0;
 
-  // ── Loading / not found ──────────────────────────────────────────────────────
+  // ── Loading ──────────────────────────────────────────────────────────────────
   if (loadingCabin) {
     return (
-      <main className="min-h-screen bg-[var(--lv-dark)] flex items-center justify-center">
-        <p className="text-sm text-[var(--lv-cream)]/50">{bookingCopy.catalog.loading}</p>
+      <main className="flex min-h-screen items-center justify-center bg-[var(--lv-dark)]">
+        <p className="text-sm text-[var(--lv-cream)]/50">
+          {bookingCopy.catalog.loading}
+        </p>
       </main>
     );
   }
 
   if (notFound || !cabin) {
     return (
-      <main className="min-h-screen bg-[var(--cabin-bg)] flex flex-col items-center justify-center gap-6 px-6">
-        <p className="text-base text-[var(--cabin-ink-soft)]">{bookingCopy.detail.notFound}</p>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[var(--cabin-bg)] px-6">
+        <p className="text-base text-[var(--cabin-ink-soft)]">
+          {bookingCopy.detail.notFound}
+        </p>
         <Link
           href="/booking"
           className="text-sm font-semibold text-[var(--cabin-forest-deep)] underline-offset-4 hover:underline"
@@ -272,23 +299,23 @@ export default function CabinDetailPage() {
     );
   }
 
-  const heroImg = cabinImage(cabin.slug, cabin.images);
+  const gallery = getCabinGallery(cabin.slug, cabin.images);
 
-  // ── Success step — full page ─────────────────────────────────────────────────
+  // ── Success ──────────────────────────────────────────────────────────────────
   if (step === 'success' && reservation) {
     return (
       <main className="min-h-screen bg-[var(--cabin-bg)] px-6 py-16 text-[var(--cabin-ink)] antialiased sm:py-20">
-        <div className="mx-auto max-w-3xl overflow-hidden rounded-2xl bg-[var(--cabin-cream)] shadow-[0_14px_48px_rgba(45,38,32,0.06)] ring-1 ring-[var(--cabin-border-soft)]">
+        <div className="mx-auto max-w-3xl overflow-hidden rounded-3xl bg-[var(--cabin-cream)] shadow-[0_20px_64px_rgba(45,38,32,0.08)]">
           <div className="h-1.5 w-full bg-gradient-to-r from-[var(--cabin-forest)] via-[var(--cabin-terra)]/70 to-[var(--cabin-olive)]/80" />
-          <div className="p-8 sm:p-10">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-olive)]">
+          <div className="p-8 sm:p-12">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[var(--cabin-olive)]">
               {hotelConfig.hotelShortName}
             </p>
-            <div className="mt-4 inline-flex rounded-full bg-[var(--cabin-olive-soft)]/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--cabin-forest-deep)] ring-1 ring-[var(--cabin-border)]">
+            <div className="mt-4 inline-flex rounded-full bg-[var(--cabin-olive-soft)] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--cabin-forest-deep)]">
               {bookingCopy.success.badge}
             </div>
 
-            <h1 className="mt-6 text-3xl font-semibold tracking-tight text-[var(--cabin-forest-deep)] sm:text-4xl">
+            <h1 className="mt-6 text-3xl font-light tracking-tight text-[var(--cabin-forest-deep)] sm:text-4xl">
               {bookingCopy.success.thankYou(reservation.guest.firstName)}
             </h1>
 
@@ -300,49 +327,49 @@ export default function CabinDetailPage() {
               {bookingCopy.success.bodyAfterStatus}
             </p>
 
-            <dl className="mt-8 grid gap-4 rounded-xl bg-[var(--cabin-bg)] p-6 ring-1 ring-[var(--cabin-border-soft)] sm:grid-cols-2">
+            {/* Reservation code — hero element */}
+            <div className="mt-8 rounded-2xl bg-[var(--cabin-forest-deep)] px-7 py-5 sm:px-8">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--lv-cream)]/50">
+                {bookingCopy.success.reservationCode}
+              </p>
+              <p className="mt-1.5 font-mono text-2xl font-semibold tracking-wider text-[var(--lv-cream)]">
+                {reservation.reservationCode}
+              </p>
+            </div>
+
+            {/* Detail grid */}
+            <dl className="mt-6 grid gap-x-8 gap-y-5 rounded-2xl bg-[var(--cabin-bg)] p-6 sm:grid-cols-2">
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)]">
-                  {bookingCopy.success.reservationCode}
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--cabin-ink-faint)]">
+                  {bookingCopy.success.hotel}
                 </dt>
-                <dd className="mt-1 font-mono text-lg font-semibold text-[var(--cabin-ink)]">
-                  {reservation.reservationCode}
+                <dd className="mt-1 text-sm text-[var(--cabin-ink)]">
+                  {reservation.hotel.name}
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)]">
-                  {bookingCopy.success.hotel}
-                </dt>
-                <dd className="mt-1 text-sm text-[var(--cabin-ink)]">{reservation.hotel.name}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)]">
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--cabin-ink-faint)]">
                   {bookingCopy.success.roomType}
                 </dt>
-                <dd className="mt-1 text-sm text-[var(--cabin-ink)]">{reservation.roomType.name}</dd>
+                <dd className="mt-1 text-sm text-[var(--cabin-ink)]">
+                  {reservation.roomType.name}
+                </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)]">
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--cabin-ink-faint)]">
                   {bookingCopy.success.stay}
                 </dt>
                 <dd className="mt-1 text-sm text-[var(--cabin-ink)]">
-                  {formatDateEs(reservation.checkInDate)} → {formatDateEs(reservation.checkOutDate)}
+                  {formatDateEs(reservation.checkInDate)} →{' '}
+                  {formatDateEs(reservation.checkOutDate)}
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)]">
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--cabin-ink-faint)]">
                   {bookingCopy.success.totalAmount}
                 </dt>
                 <dd className="mt-1 text-sm font-semibold text-[var(--cabin-ink)]">
                   {formatCurrency(reservation.totalAmount)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)]">
-                  {bookingCopy.success.paymentStatus}
-                </dt>
-                <dd className="mt-1 text-sm text-[var(--cabin-ink)]">
-                  {reservation.paymentStatus}
                 </dd>
               </div>
             </dl>
@@ -368,13 +395,15 @@ export default function CabinDetailPage() {
               <button
                 onClick={handlePay}
                 disabled={paying}
-                className={btnPrimary + ' sm:w-auto sm:flex-none px-10'}
+                className={`${btnPrimary} sm:w-auto sm:flex-none sm:px-12`}
               >
-                {paying ? bookingCopy.summary.creating : bookingCopy.success.proceedPay}
+                {paying
+                  ? bookingCopy.summary.creating
+                  : bookingCopy.success.proceedPay}
               </button>
               <Link
                 href="/booking"
-                className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-[var(--cabin-border)] bg-transparent px-8 text-sm font-medium text-[var(--cabin-ink)] transition hover:bg-[var(--cabin-bg-deep)] sm:w-auto"
+                className="inline-flex min-h-[56px] items-center justify-center rounded-2xl border border-[var(--cabin-border)] bg-transparent px-8 text-sm font-medium text-[var(--cabin-ink)] transition hover:bg-[var(--cabin-bg-deep)] sm:w-auto"
               >
                 {bookingCopy.success.anotherBooking}
               </Link>
@@ -385,16 +414,16 @@ export default function CabinDetailPage() {
     );
   }
 
-  // ── Main layout: detail + booking card ──────────────────────────────────────
+  // ── Main detail layout ───────────────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-[var(--cabin-bg)] antialiased">
-      {/* Sticky top nav */}
+      {/* Sticky nav */}
       <nav className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--cabin-border-soft)] bg-[var(--cabin-elevated)]/95 px-6 py-4 backdrop-blur-sm sm:px-10 lg:px-16">
         <Link
           href="/booking"
-          className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-ink-faint)] transition-colors hover:text-[var(--cabin-ink)]"
+          className="flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-ink-faint)] transition-colors hover:text-[var(--cabin-ink)]"
         >
-          <span>←</span>
+          <span aria-hidden>←</span>
           {bookingCopy.detail.backLabel}
         </Link>
         <span className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-ink-faint)]">
@@ -402,25 +431,35 @@ export default function CabinDetailPage() {
         </span>
       </nav>
 
-      {/* Hero image */}
-      <div className="relative h-[56vh] min-h-[320px] overflow-hidden bg-[var(--lv-dark)]">
+      {/* Hero — 70vh desktop / full height mobile */}
+      <div className="relative h-[100svh] overflow-hidden bg-[var(--lv-dark)] lg:h-[70vh]">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${heroImg})` }}
+          style={{
+            backgroundImage: `url(${selectedImage})`,
+            opacity: imgFadingOut ? 0 : 1,
+            transition: 'opacity 180ms ease-out',
+          }}
           aria-hidden
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-[var(--lv-dark)]/70 via-[var(--lv-dark)]/20 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-[var(--lv-dark)]/80 via-[var(--lv-dark)]/25 to-transparent"
           aria-hidden
         />
-        <div className="absolute bottom-0 left-0 right-0 px-6 pb-10 sm:px-10 lg:px-16">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[var(--cabin-terra)]">
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-[var(--lv-dark)]/30 via-transparent to-transparent"
+          aria-hidden
+        />
+
+        {/* Text overlay — bottom left */}
+        <div className="absolute bottom-0 left-0 right-0 px-6 pb-12 sm:px-10 lg:px-16 lg:pb-14">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.36em] text-[var(--cabin-terra)]">
             {bookingCopy.detail.cabinEyebrow}
           </p>
-          <h1 className="mt-3 text-4xl font-light tracking-tight text-[var(--lv-cream)] sm:text-5xl lg:text-6xl">
+          <h1 className="mt-3 max-w-2xl text-4xl font-light leading-[1.08] tracking-tight text-[var(--lv-cream)] sm:text-5xl lg:text-6xl">
             {cabin.name}
           </h1>
-          <p className="mt-2 text-lg font-semibold tabular-nums text-[var(--lv-cream)]/80">
+          <p className="mt-3 text-xl font-semibold tabular-nums text-[var(--lv-cream)]/85">
             {formatCurrency(cabin.basePrice)}{' '}
             <span className="text-sm font-normal text-[var(--lv-cream)]/50">
               {bookingCopy.catalog.perNight}
@@ -429,24 +468,57 @@ export default function CabinDetailPage() {
         </div>
       </div>
 
-      {/* Two-column layout */}
-      <div className="mx-auto max-w-7xl px-6 py-12 sm:px-10 lg:grid lg:grid-cols-12 lg:gap-16 lg:px-16 lg:py-16">
-        {/* Booking card — mobile: first; desktop: right col */}
-        <aside className="mb-12 lg:sticky lg:top-24 lg:col-span-5 lg:col-start-8 lg:mb-0 lg:row-start-1 lg:self-start">
-          <div className="overflow-hidden rounded-2xl bg-[var(--cabin-elevated)] shadow-[0_8px_40px_rgba(28,24,19,0.10)] ring-1 ring-[var(--cabin-border-soft)]">
+      {/* Gallery thumbnail strip */}
+      {gallery.length > 1 && (
+        <div className="border-b border-[var(--cabin-border-soft)] bg-[var(--cabin-elevated)] px-6 py-4 sm:px-10 lg:px-16">
+          <div className="scrollbar-hide flex gap-2.5 overflow-x-auto">
+            {gallery.map((src, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => selectThumbnail(src)}
+                className="shrink-0 overflow-hidden rounded-xl transition-all duration-200"
+                style={{
+                  height: 68,
+                  width: 102,
+                  backgroundImage: `url(${src})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  outline:
+                    selectedImage === src
+                      ? '2px solid var(--cabin-terra)'
+                      : '2px solid transparent',
+                  outlineOffset: 2,
+                  opacity: selectedImage === src ? 1 : 0.65,
+                }}
+                aria-label={`Imagen ${i + 1}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Two-column content */}
+      <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 lg:grid lg:grid-cols-12 lg:gap-16 lg:px-16 lg:py-16">
+        {/* Booking card — mobile first, desktop right col */}
+        <aside className="mb-14 lg:sticky lg:top-24 lg:col-span-5 lg:col-start-8 lg:mb-0 lg:row-start-1 lg:self-start">
+          <div className="overflow-hidden rounded-3xl bg-[var(--cabin-elevated)] shadow-[0_16px_56px_rgba(28,24,19,0.12)]">
+            {/* Card header */}
             <div className="border-b border-[var(--cabin-border-soft)] px-7 py-5 sm:px-8">
-              <h2 className="text-base font-semibold text-[var(--cabin-forest-deep)]">
+              <h2 className="text-sm font-semibold tracking-wide text-[var(--cabin-forest-deep)]">
                 {bookingCopy.detail.bookingCardTitle}
               </h2>
             </div>
 
-            <div className="px-7 py-6 sm:px-8">
-              {/* Dates step */}
+            <div className="px-7 py-7 sm:px-8">
+              {/* ── Dates step ── */}
               {step === 'dates' && (
                 <form onSubmit={handleCheckAvailability} className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={labelCls}>{bookingCopy.search.arrival}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.search.arrival}
+                      </label>
                       <input
                         type="date"
                         className={inputCls}
@@ -465,7 +537,9 @@ export default function CabinDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className={labelCls}>{bookingCopy.search.departure}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.search.departure}
+                      </label>
                       <input
                         type="date"
                         className={inputCls}
@@ -481,18 +555,23 @@ export default function CabinDetailPage() {
                   </div>
 
                   {nights > 0 && (
-                    <p className="text-xs text-[var(--cabin-ink-faint)]">
-                      {nights === 1 ? '1 noche' : `${nights} noches`}{' '}
-                      ·{' '}
-                      <span className="font-semibold text-[var(--cabin-ink)]">
-                        {formatCurrency(estimatedTotal)}
-                      </span>{' '}
-                      estimado
-                    </p>
+                    <div className="rounded-xl bg-[var(--cabin-bg)] px-4 py-3">
+                      <p className="text-xs text-[var(--cabin-ink-faint)]">
+                        {nights === 1 ? '1 noche' : `${nights} noches`}
+                      </p>
+                      <p className="mt-0.5 text-base font-semibold tabular-nums text-[var(--cabin-ink)]">
+                        {formatCurrency(estimatedTotal)}{' '}
+                        <span className="text-xs font-normal text-[var(--cabin-ink-faint)]">
+                          estimado
+                        </span>
+                      </p>
+                    </div>
                   )}
 
                   {availabilityError && (
-                    <p className="text-sm font-medium text-red-700">{availabilityError}</p>
+                    <p className="text-sm font-medium text-red-700">
+                      {availabilityError}
+                    </p>
                   )}
 
                   <button
@@ -511,22 +590,22 @@ export default function CabinDetailPage() {
                 </form>
               )}
 
-              {/* Reserve step */}
+              {/* ── Reserve step ── */}
               {step === 'reserve' && (
                 <form onSubmit={handleReserve} className="space-y-5">
-                  {/* Locked dates summary */}
-                  <div className="rounded-xl bg-[var(--cabin-bg)] p-4 ring-1 ring-[var(--cabin-border-soft)]">
-                    <div className="flex items-center justify-between">
+                  {/* Locked dates */}
+                  <div className="rounded-xl bg-[var(--cabin-bg)] px-4 py-3">
+                    <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--cabin-ink-faint)]">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--cabin-ink-faint)]">
                           {bookingCopy.summary.dates}
                         </p>
-                        <p className="mt-0.5 text-sm text-[var(--cabin-ink)]">
+                        <p className="mt-1 text-sm text-[var(--cabin-ink)]">
                           {formatDateEs(checkIn)} → {formatDateEs(checkOut)}
                         </p>
                         <p className="mt-0.5 text-xs text-[var(--cabin-ink-faint)]">
-                          {nights === 1 ? '1 noche' : `${nights} noches`}{' '}
-                          · {formatCurrency(estimatedTotal)} estimado
+                          {nights === 1 ? '1 noche' : `${nights} noches`} ·{' '}
+                          {formatCurrency(estimatedTotal)} estimado
                         </p>
                       </div>
                       <button
@@ -535,17 +614,18 @@ export default function CabinDetailPage() {
                           setStep('dates');
                           setAvailabilityError('');
                         }}
-                        className="shrink-0 text-xs font-semibold text-[var(--cabin-forest-deep)] underline-offset-4 hover:underline"
+                        className="shrink-0 text-[11px] font-semibold text-[var(--cabin-forest-deep)] underline-offset-4 hover:underline"
                       >
                         {bookingCopy.detail.changeDates}
                       </button>
                     </div>
                   </div>
 
-                  {/* Guest fields */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={labelCls}>{bookingCopy.guest.firstName}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.guest.firstName}
+                      </label>
                       <input
                         className={inputCls}
                         value={firstName}
@@ -555,7 +635,9 @@ export default function CabinDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className={labelCls}>{bookingCopy.guest.lastName}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.guest.lastName}
+                      </label>
                       <input
                         className={inputCls}
                         value={lastName}
@@ -578,9 +660,11 @@ export default function CabinDetailPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={labelCls}>{bookingCopy.guest.phone}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.guest.phone}
+                      </label>
                       <input
                         type="tel"
                         className={inputCls}
@@ -590,7 +674,9 @@ export default function CabinDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className={labelCls}>{bookingCopy.guest.country}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.guest.country}
+                      </label>
                       <input
                         className={inputCls}
                         value={country}
@@ -600,37 +686,53 @@ export default function CabinDetailPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={labelCls}>{bookingCopy.guest.adults}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.guest.adults}
+                      </label>
                       <select
                         className={inputCls}
                         value={adults}
                         onChange={(e) => setAdults(Number(e.target.value))}
                       >
-                        {Array.from({ length: cabin.capacityAdults }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>{n}</option>
+                        {Array.from(
+                          { length: cabin.capacityAdults },
+                          (_, i) => i + 1,
+                        ).map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className={labelCls}>{bookingCopy.guest.children}</label>
+                      <label className={labelCls}>
+                        {bookingCopy.guest.children}
+                      </label>
                       <select
                         className={inputCls}
                         value={children}
                         onChange={(e) => setChildren(Number(e.target.value))}
                       >
-                        {Array.from({ length: cabin.capacityChildren + 1 }, (_, i) => i).map((n) => (
-                          <option key={n} value={n}>{n}</option>
+                        {Array.from(
+                          { length: cabin.capacityChildren + 1 },
+                          (_, i) => i,
+                        ).map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
                         ))}
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className={labelCls}>{bookingCopy.guest.specialRequests}</label>
+                    <label className={labelCls}>
+                      {bookingCopy.guest.specialRequests}
+                    </label>
                     <textarea
-                      className={inputCls + ' resize-none'}
+                      className={`${inputCls} resize-none`}
                       rows={3}
                       value={specialRequests}
                       onChange={(e) => setSpecialRequests(e.target.value)}
@@ -639,10 +741,16 @@ export default function CabinDetailPage() {
                   </div>
 
                   {reserveError && (
-                    <p className="text-sm font-medium text-red-700">{reserveError}</p>
+                    <p className="text-sm font-medium text-red-700">
+                      {reserveError}
+                    </p>
                   )}
 
-                  <button type="submit" disabled={submitting} className={btnPrimary}>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className={btnPrimary}
+                  >
                     {submitting
                       ? bookingCopy.guest.creating
                       : bookingCopy.guest.completeCta}
@@ -657,52 +765,65 @@ export default function CabinDetailPage() {
           </div>
         </aside>
 
-        {/* Cabin info — mobile: second; desktop: left col */}
-        <div className="lg:col-span-7 lg:col-start-1 lg:row-start-1">
-          {/* Description */}
+        {/* Cabin info — mobile second, desktop left col */}
+        <div className="space-y-12 lg:col-span-7 lg:col-start-1 lg:row-start-1">
+          {/* La experiencia */}
           {cabin.description && (
-            <section className="mb-10">
-              <p className="text-base leading-relaxed text-[var(--cabin-ink-soft)] sm:text-lg">
+            <section>
+              <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-ink-faint)]">
+                {bookingCopy.detail.experienceTitle}
+              </p>
+              <p className="text-base leading-[1.85] text-[var(--cabin-ink-soft)] sm:text-[1.05rem]">
                 {cabin.description}
               </p>
             </section>
           )}
 
-          {/* Quick specs chips */}
-          <div className="mb-10 flex flex-wrap gap-2">
-            <span className="rounded-full bg-[var(--cabin-olive-soft)] px-4 py-1.5 text-xs font-medium text-[var(--cabin-ink)] ring-1 ring-[var(--cabin-border)]">
-              {bookingCopy.catalog.capacityLabel(cabin.capacityAdults)}
-            </span>
-            {cabin.bedType && (
-              <span className="rounded-full bg-[var(--cabin-olive-soft)] px-4 py-1.5 text-xs font-medium text-[var(--cabin-ink)] ring-1 ring-[var(--cabin-border)]">
-                {cabin.bedType}
-              </span>
-            )}
-            {cabin.sizeM2 && (
-              <span className="rounded-full bg-[var(--cabin-olive-soft)] px-4 py-1.5 text-xs font-medium text-[var(--cabin-ink)] ring-1 ring-[var(--cabin-border)]">
-                {cabin.sizeM2} m²
-              </span>
-            )}
-          </div>
+          <div className="border-t border-[var(--cabin-border-soft)]" />
 
-          {/* Amenities */}
+          {/* Tu espacio */}
+          <section>
+            <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-ink-faint)]">
+              {bookingCopy.detail.specsTitle}
+            </p>
+            <div className="flex flex-wrap gap-2.5">
+              <span className="rounded-full bg-[var(--cabin-olive-soft)] px-4 py-2 text-xs font-medium text-[var(--cabin-ink)]">
+                {bookingCopy.catalog.capacityLabel(cabin.capacityAdults)}
+              </span>
+              {cabin.bedType && (
+                <span className="rounded-full bg-[var(--cabin-olive-soft)] px-4 py-2 text-xs font-medium text-[var(--cabin-ink)]">
+                  {cabin.bedType}
+                </span>
+              )}
+              {cabin.sizeM2 && (
+                <span className="rounded-full bg-[var(--cabin-olive-soft)] px-4 py-2 text-xs font-medium text-[var(--cabin-ink)]">
+                  {cabin.sizeM2} m²
+                </span>
+              )}
+            </div>
+          </section>
+
+          {/* Incluido en tu estancia */}
           {cabin.amenities.length > 0 && (
-            <section>
-              <h2 className="mb-6 text-xs font-semibold uppercase tracking-[0.26em] text-[var(--cabin-ink-faint)]">
-                {bookingCopy.detail.amenitiesTitle}
-              </h2>
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {cabin.amenities.map((a) => (
-                  <li
-                    key={a.name}
-                    className="flex items-center gap-3 text-sm text-[var(--cabin-ink-soft)]"
-                  >
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--cabin-terra)]" />
-                    {a.name}
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <>
+              <div className="border-t border-[var(--cabin-border-soft)]" />
+              <section>
+                <p className="mb-6 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-ink-faint)]">
+                  {bookingCopy.detail.amenitiesTitle}
+                </p>
+                <ul className="grid gap-y-3.5 sm:grid-cols-2 sm:gap-x-8">
+                  {cabin.amenities.map((a) => (
+                    <li
+                      key={a.name}
+                      className="flex items-center gap-3 text-sm text-[var(--cabin-ink-soft)]"
+                    >
+                      <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-[var(--cabin-terra)]" />
+                      {a.name}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </>
           )}
         </div>
       </div>

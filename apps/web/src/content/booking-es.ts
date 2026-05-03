@@ -185,6 +185,8 @@ export const bookingCopy = {
   detail: {
     backLabel: 'Todas las cabañas',
     cabinEyebrow: 'Los Vagones · La Marquesa',
+    experienceTitle: 'La experiencia',
+    specsTitle: 'Tu espacio',
     amenitiesTitle: 'Incluido en tu estancia',
     bookingCardTitle: 'Reservar esta cabaña',
     checkAvailability: 'Verificar disponibilidad',
