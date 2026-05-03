@@ -169,4 +169,31 @@ export const bookingCopy = {
   home: {
     bookCta: 'Reservar estancia',
   },
+
+  catalog: {
+    eyebrow: 'Cabañas & Vagones',
+    headline: 'Elige tu espacio',
+    subheadline:
+      'Seis espacios únicos en el bosque de La Marquesa. Cada uno con fogata privada y entrada independiente.',
+    perNight: '/ noche',
+    viewCabin: 'Ver cabaña',
+    capacityLabel: (n: number) => `Hasta ${n} personas`,
+    loading: 'Cargando cabañas…',
+    error: 'No pudimos cargar las cabañas. Intenta de nuevo.',
+  },
+
+  detail: {
+    backLabel: 'Todas las cabañas',
+    cabinEyebrow: 'Los Vagones · La Marquesa',
+    amenitiesTitle: 'Incluido en tu estancia',
+    bookingCardTitle: 'Reservar esta cabaña',
+    checkAvailability: 'Verificar disponibilidad',
+    checking: 'Verificando…',
+    unavailableMsg:
+      'No hay disponibilidad para esas fechas. Elige otras fechas.',
+    changeDates: 'Cambiar fechas',
+    noTaxNote: 'Sin impuestos incluidos',
+    notFound: 'Cabaña no encontrada.',
+    notFoundCta: 'Ver todas las cabañas',
+  },
 } as const;
