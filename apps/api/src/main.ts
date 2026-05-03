@@ -13,6 +13,7 @@ async function bootstrap() {
     'https://losvagones.mx',
     'https://www.losvagones.mx',
     'https://admin.losvagones.mx',
+    'https://losvagones-admin.vercel.app',
   ];
 
   app.enableCors({
