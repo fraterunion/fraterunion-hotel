@@ -42,10 +42,20 @@ type Step = 'dates' | 'reserve' | 'success';
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-// Static gallery paths — drop real photos into /public/images/cabins/{slug}/
-// and update these arrays. DB images (cabin.images) take priority automatically.
+// Static gallery paths per cabin slug.
+// DB images (cabin.images) take priority when populated via admin.
+// Drop photos into /public/images/cabins/{slug}/ and add paths here.
 const CABIN_GALLERY: Record<string, string[]> = {
-  'casa-grande': ['/images/los-vagones-hero.jpg'],
+  'casa-grande': [
+    '/images/cabins/casa-grande/hero.jpg',
+    '/images/cabins/casa-grande/gallery-01.jpg',
+    '/images/cabins/casa-grande/gallery-02.jpg',
+    '/images/cabins/casa-grande/gallery-03.jpg',
+    '/images/cabins/casa-grande/gallery-04.jpg',
+    '/images/cabins/casa-grande/gallery-05.jpg',
+    '/images/cabins/casa-grande/gallery-06.jpg',
+    '/images/cabins/casa-grande/gallery-07.jpg',
+  ],
   girasoles: ['/images/los-vagones-hero.jpg'],
   alcatraces: ['/images/los-vagones-hero.jpg'],
   'cabana-del-aguila': ['/images/los-vagones-hero.jpg'],
@@ -470,30 +480,39 @@ export default function CabinDetailPage() {
 
       {/* Gallery thumbnail strip */}
       {gallery.length > 1 && (
-        <div className="border-b border-[var(--cabin-border-soft)] bg-[var(--cabin-elevated)] px-6 py-4 sm:px-10 lg:px-16">
-          <div className="scrollbar-hide flex gap-2.5 overflow-x-auto">
-            {gallery.map((src, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => selectThumbnail(src)}
-                className="shrink-0 overflow-hidden rounded-xl transition-all duration-200"
-                style={{
-                  height: 68,
-                  width: 102,
-                  backgroundImage: `url(${src})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  outline:
-                    selectedImage === src
-                      ? '2px solid var(--cabin-terra)'
-                      : '2px solid transparent',
-                  outlineOffset: 2,
-                  opacity: selectedImage === src ? 1 : 0.65,
-                }}
-                aria-label={`Imagen ${i + 1}`}
-              />
-            ))}
+        <div className="bg-[var(--lv-dark)] px-6 pb-6 pt-4 sm:px-10 lg:px-16">
+          <div className="mx-auto max-w-7xl">
+            {/* Counter */}
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--lv-cream)]/35">
+              {gallery.indexOf(selectedImage) + 1} / {gallery.length}
+            </p>
+            {/* Thumbnail row */}
+            <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-1">
+              {gallery.map((src, i) => {
+                const isSelected = selectedImage === src;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => selectThumbnail(src)}
+                    aria-label={`Foto ${i + 1}`}
+                    className="shrink-0 overflow-hidden rounded-xl transition-all duration-300"
+                    style={{
+                      height: 96,
+                      width: 144,
+                      backgroundImage: `url(${src})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      opacity: isSelected ? 1 : 0.45,
+                      boxShadow: isSelected
+                        ? '0 0 0 2px var(--cabin-terra), 0 0 0 4px rgba(176,68,48,0.25)'
+                        : 'none',
+                      transform: isSelected ? 'scale(1)' : 'scale(0.97)',
+                    }}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
