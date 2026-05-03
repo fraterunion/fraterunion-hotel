@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminShell from '../../components/admin/AdminShell';
+import { apiFetch } from '../../lib/api';
 
 type RechartsModule = typeof import('recharts');
 
@@ -28,22 +29,29 @@ type Metrics = {
   totalRevenuePending: number;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+type RecentReservation = {
+  id: string;
+  reservationCode: string;
+  status: string;
+  paymentStatus: string;
+  createdAt: string;
+  totalAmount: string;
+  guest: { firstName: string; lastName: string };
+  roomType: { name: string };
+};
 
 const OCCUPANCY_WEEKLY_MOCK = [
-  { day: 'Mon', occupancy: 62 },
-  { day: 'Tue', occupancy: 68 },
-  { day: 'Wed', occupancy: 64 },
-  { day: 'Thu', occupancy: 72 },
-  { day: 'Fri', occupancy: 81 },
-  { day: 'Sat', occupancy: 88 },
-  { day: 'Sun', occupancy: 76 },
+  { day: 'Lun', occupancy: 62 },
+  { day: 'Mar', occupancy: 68 },
+  { day: 'Mié', occupancy: 64 },
+  { day: 'Jue', occupancy: 72 },
+  { day: 'Vie', occupancy: 81 },
+  { day: 'Sáb', occupancy: 88 },
+  { day: 'Dom', occupancy: 76 },
 ] as const;
 
 const chartAxisTick = { fill: '#a3a3a3', fontSize: 11 };
-/** Soft slate line — readable without harsh black */
 const chartLineStroke = '#64748b';
-/** Bar fill: cool slate, slightly above flat gray */
 const chartBarFill = '#64748b';
 const chartBarFillEnd = '#556273';
 
@@ -57,9 +65,13 @@ function ChartTooltipFrame({
   return (
     <div className="rounded-lg border border-neutral-200/80 bg-white px-3.5 py-2.5 shadow-[0_4px_24px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.04)]">
       {eyebrow ? (
-        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">{eyebrow}</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+          {eyebrow}
+        </p>
       ) : null}
-      <div className={`tabular-nums text-[13px] font-semibold leading-snug tracking-tight text-neutral-900 ${eyebrow ? 'mt-1' : ''}`}>
+      <div
+        className={`tabular-nums text-[13px] font-semibold leading-snug tracking-tight text-neutral-900 ${eyebrow ? 'mt-1' : ''}`}
+      >
         {children}
       </div>
     </div>
@@ -80,7 +92,7 @@ function OccupancyChartTooltip({
   if (value == null) return null;
   return (
     <ChartTooltipFrame eyebrow={label != null ? String(label) : undefined}>
-      {value}% occupancy
+      {value}% ocupación
     </ChartTooltipFrame>
   );
 }
@@ -216,7 +228,7 @@ function DashboardRevenueChart({
           tickLine={false}
           tick={chartAxisTick}
           tickFormatter={(v: number) => formatCurrency(v)}
-          width={52}
+          width={68}
         />
         <Tooltip
           content={<RevenueChartTooltip formatCurrency={formatCurrency} />}
@@ -333,41 +345,50 @@ function DashboardInsightIcon({ tone }: { tone: InsightTone }) {
   );
 }
 
+const reservationStatusLabel: Record<string, string> = {
+  PENDING: 'Pendiente',
+  CONFIRMED: 'Confirmada',
+  CHECKED_IN: 'En estancia',
+  CHECKED_OUT: 'Finalizada',
+  CANCELLED: 'Cancelada',
+  NO_SHOW: 'No presentado',
+};
+
+const reservationStatusClasses: Record<string, string> = {
+  PENDING: 'bg-amber-50 text-amber-700',
+  CONFIRMED: 'bg-sky-50 text-sky-700',
+  CHECKED_IN: 'bg-emerald-50 text-emerald-700',
+  CHECKED_OUT: 'bg-neutral-100 text-neutral-600',
+  CANCELLED: 'bg-rose-50 text-rose-700',
+  NO_SHOW: 'bg-neutral-100 text-neutral-500',
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<AdminUser | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [recentReservations, setRecentReservations] = useState<RecentReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [rechartsMod, setRechartsMod] = useState<RechartsModule | null>(null);
 
   useEffect(() => {
     async function bootstrap() {
       const token = localStorage.getItem('fu_admin_token');
-
       if (!token) {
         router.push('/login');
         return;
       }
 
       try {
-        const [meRes, metricsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_BASE_URL}/admin/reservations/metrics/summary`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+        const [meData, metricsData, reservationsData] = await Promise.all([
+          apiFetch<{ user: AdminUser }>('/auth/me'),
+          apiFetch<Metrics>('/admin/reservations/metrics/summary'),
+          apiFetch<RecentReservation[]>('/admin/reservations'),
         ]);
-
-        if (!meRes.ok || !metricsRes.ok) {
-          throw new Error('Unauthorized');
-        }
-
-        const meData = await meRes.json();
-        const metricsData = await metricsRes.json();
 
         setUser(meData.user);
         setMetrics(metricsData);
+        setRecentReservations(reservationsData.slice(0, 6));
       } catch {
         localStorage.removeItem('fu_admin_token');
         localStorage.removeItem('fu_admin_user');
@@ -385,119 +406,59 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return <main className="min-h-screen bg-neutral-100 p-8">Loading dashboard...</main>;
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-neutral-100">
+        <p className="text-sm text-neutral-400">Cargando panel…</p>
+      </main>
+    );
   }
 
   if (!user || !metrics) return null;
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-US', {
+    new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'MXN',
       maximumFractionDigits: 0,
     }).format(value);
 
   const occupancyChartData = [...OCCUPANCY_WEEKLY_MOCK];
 
   const revenueBreakdownData = [
-    { name: 'Booked', value: metrics.totalRevenueBooked },
-    { name: 'Paid', value: metrics.totalRevenuePaid },
-    { name: 'Pending', value: metrics.totalRevenuePending },
+    { name: 'Reservado', value: metrics.totalRevenueBooked },
+    { name: 'Pagado', value: metrics.totalRevenuePaid },
+    { name: 'Pendiente', value: metrics.totalRevenuePending },
   ];
 
   const operationsKpis = [
     {
-      label: 'Total reservations',
-      value: metrics.totalReservations.toLocaleString(),
-      delta: '+8%',
-      deltaTone: 'positive',
+      label: 'Total reservas',
+      value: metrics.totalReservations.toLocaleString('es-MX'),
     },
     {
-      label: 'Pending',
-      value: metrics.pendingReservations.toLocaleString(),
-      delta: '-3%',
-      deltaTone: 'negative',
+      label: 'Pendientes',
+      value: metrics.pendingReservations.toLocaleString('es-MX'),
     },
     {
-      label: 'Checked in',
-      value: metrics.checkedInReservations.toLocaleString(),
-      delta: '+2%',
-      deltaTone: 'positive',
+      label: 'En estancia',
+      value: metrics.checkedInReservations.toLocaleString('es-MX'),
     },
   ] as const;
 
   const revenueKpis = [
     {
-      label: 'Revenue booked',
+      label: 'Monto reservado',
       value: formatCurrency(metrics.totalRevenueBooked),
-      delta: '+6%',
-      deltaTone: 'positive',
     },
     {
-      label: 'Revenue paid',
+      label: 'Monto pagado',
       value: formatCurrency(metrics.totalRevenuePaid),
-      delta: '+4%',
-      deltaTone: 'positive',
     },
     {
-      label: 'Revenue pending',
+      label: 'Monto pendiente',
       value: formatCurrency(metrics.totalRevenuePending),
-      delta: '-2%',
-      deltaTone: 'neutral',
     },
   ] as const;
-
-  const recentReservations = [
-    {
-      guest: 'Emily Carter',
-      room: 'Deluxe 204',
-      status: 'Confirmed',
-      date: 'Apr 07, 2026',
-      amount: '$340',
-    },
-    {
-      guest: 'Marcus Lee',
-      room: 'Suite 501',
-      status: 'Pending',
-      date: 'Apr 07, 2026',
-      amount: '$520',
-    },
-    {
-      guest: 'Olivia Chen',
-      room: 'Standard 118',
-      status: 'Checked in',
-      date: 'Apr 06, 2026',
-      amount: '$210',
-    },
-    {
-      guest: 'Noah Davis',
-      room: 'Superior 309',
-      status: 'Checked out',
-      date: 'Apr 06, 2026',
-      amount: '$410',
-    },
-    {
-      guest: 'Sophia Martin',
-      room: 'Deluxe 222',
-      status: 'Cancelled',
-      date: 'Apr 05, 2026',
-      amount: '$0',
-    },
-  ] as const;
-
-  const deltaToneClasses = {
-    positive: 'text-emerald-600/55',
-    negative: 'text-red-600/50',
-    neutral: 'text-neutral-400',
-  } as const;
-
-  const statusClasses: Record<string, string> = {
-    Pending: 'bg-amber-50 text-amber-700',
-    Confirmed: 'bg-sky-50 text-sky-700',
-    'Checked in': 'bg-emerald-50 text-emerald-700',
-    'Checked out': 'bg-neutral-100 text-neutral-700',
-    Cancelled: 'bg-rose-50 text-rose-700',
-  };
 
   type Insight = {
     tone: InsightTone;
@@ -513,25 +474,25 @@ export default function DashboardPage() {
   ) {
     insightCandidates.push({
       tone: 'warning',
-      title: 'High pending reservations',
-      explanation: 'Over 40% are not confirmed.',
-      actionHint: 'Review pending reservations',
+      title: 'Alto volumen de reservas pendientes',
+      explanation: 'Más del 40% de las reservas aún no están confirmadas.',
+      actionHint: 'Revisar reservas pendientes',
     });
   }
-  if (metrics.totalRevenueBooked > 50000) {
+  if (metrics.totalRevenuePaid > 0) {
     insightCandidates.push({
       tone: 'positive',
-      title: 'Strong revenue performance',
-      explanation: 'Strong revenue performance this week.',
-      actionHint: 'Monitor revenue trends',
+      title: 'Ingresos activos',
+      explanation: `${formatCurrency(metrics.totalRevenuePaid)} en pagos procesados.`,
+      actionHint: 'Ver desglose de ingresos',
     });
   }
-  if (metrics.checkedInReservations === 0) {
+  if (metrics.checkedInReservations === 0 && metrics.totalReservations > 0) {
     insightCandidates.push({
       tone: 'neutral',
-      title: 'No active check-ins',
-      explanation: 'No active check-ins at the moment.',
-      actionHint: "Check today's arrivals",
+      title: 'Sin estancias activas',
+      explanation: 'No hay huéspedes registrados en este momento.',
+      actionHint: 'Ver llegadas de hoy',
     });
   }
   const insights = insightCandidates.slice(0, 2);
@@ -539,13 +500,16 @@ export default function DashboardPage() {
   return (
     <AdminShell
       title="Dashboard"
-      subtitle={`Welcome back, ${user.firstName || 'there'}. Live operational overview.`}
+      subtitle={`Bienvenido, ${user.firstName || 'Administrador'}. Vista operacional en tiempo real.`}
     >
       <div className="w-full space-y-8">
+        {/* Insights */}
         <section className="rounded-3xl border border-neutral-200/90 bg-neutral-50 p-6 shadow-sm ring-1 ring-neutral-300/40">
-          <h2 className="text-base font-semibold tracking-tight text-neutral-900">Insights</h2>
+          <h2 className="text-base font-semibold tracking-tight text-neutral-900">
+            Puntos de atención
+          </h2>
           <p className="mt-1 text-xs leading-relaxed text-neutral-500">
-            Priorities from your live metrics — use these to decide what to do next.
+            Prioridades derivadas de tus métricas en vivo.
           </p>
           <ul className="mt-6 flex flex-col">
             {insights.length > 0 ? (
@@ -556,7 +520,9 @@ export default function DashboardPage() {
                 >
                   <DashboardInsightIcon tone={insight.tone} />
                   <div className="min-w-0 flex-1 pt-0.5">
-                    <p className="text-sm font-semibold text-neutral-900">{insight.title}</p>
+                    <p className="text-sm font-semibold text-neutral-900">
+                      {insight.title}
+                    </p>
                     <p className="mt-1 text-xs leading-relaxed text-neutral-600">
                       {insight.explanation}
                     </p>
@@ -570,12 +536,11 @@ export default function DashboardPage() {
               <li className="flex gap-4">
                 <DashboardInsightIcon tone="neutral" />
                 <div className="min-w-0 flex-1 pt-0.5">
-                  <p className="text-sm font-semibold text-neutral-900">All clear</p>
-                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">
-                    No notable patterns in your current metrics.
+                  <p className="text-sm font-semibold text-neutral-900">
+                    Todo en orden
                   </p>
-                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                    Review reservations when new activity appears
+                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                    No hay patrones destacables en tus métricas actuales.
                   </p>
                 </div>
               </li>
@@ -583,27 +548,24 @@ export default function DashboardPage() {
           </ul>
         </section>
 
+        {/* KPIs */}
         <section className="space-y-10">
           <div>
             <h2 className="mb-5 text-[11px] font-medium uppercase tracking-[0.2em] text-neutral-400">
-              Operations
+              Operaciones
             </h2>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {operationsKpis.map((kpi) => (
                 <article
                   key={kpi.label}
-                  className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-black/[0.03] transition-shadow duration-200 hover:shadow-sm"
+                  className="rounded-2xl bg-white px-5 py-4 shadow-sm ring-1 ring-black/[0.03]"
                 >
-                  <p className="text-[11px] font-normal leading-none text-neutral-400">{kpi.label}</p>
-                  <p className="mt-1 text-3xl font-semibold leading-none tracking-tight text-neutral-900 tabular-nums">
+                  <p className="text-[11px] font-normal leading-none text-neutral-400">
+                    {kpi.label}
+                  </p>
+                  <p className="mt-1.5 text-3xl font-semibold leading-none tracking-tight text-neutral-900 tabular-nums">
                     {kpi.value}
                   </p>
-                  <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1 gap-y-0">
-                    <span className={`text-[10px] font-normal tabular-nums ${deltaToneClasses[kpi.deltaTone]}`}>
-                      {kpi.delta}
-                    </span>
-                    <span className="text-[10px] text-neutral-400/90">vs last week</span>
-                  </div>
                 </article>
               ))}
             </div>
@@ -611,59 +573,55 @@ export default function DashboardPage() {
 
           <div>
             <h2 className="mb-5 text-[11px] font-medium uppercase tracking-[0.2em] text-neutral-400">
-              Revenue
+              Ingresos
             </h2>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {revenueKpis.map((kpi) => (
                 <article
                   key={kpi.label}
-                  className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-black/[0.03] transition-shadow duration-200 hover:shadow-sm"
+                  className="rounded-2xl bg-white px-5 py-4 shadow-sm ring-1 ring-black/[0.03]"
                 >
-                  <p className="text-[11px] font-normal leading-none text-neutral-400">{kpi.label}</p>
-                  <p className="mt-1 text-3xl font-semibold leading-none tracking-tight text-neutral-900 tabular-nums">
+                  <p className="text-[11px] font-normal leading-none text-neutral-400">
+                    {kpi.label}
+                  </p>
+                  <p className="mt-1.5 text-3xl font-semibold leading-none tracking-tight text-neutral-900 tabular-nums">
                     {kpi.value}
                   </p>
-                  <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1 gap-y-0">
-                    <span className={`text-[10px] font-normal tabular-nums ${deltaToneClasses[kpi.deltaTone]}`}>
-                      {kpi.delta}
-                    </span>
-                    <span className="text-[10px] text-neutral-400/90">vs last week</span>
-                  </div>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
+        {/* Charts */}
         <section className="grid gap-6 xl:grid-cols-2">
-          <article className="min-w-0 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/[0.03] transition-shadow duration-200 hover:shadow-sm">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-neutral-900">Occupancy Trend</h2>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  Track how room usage evolves across the week.
-                </p>
-              </div>
-            </div>
-            <div className="mt-5 h-[240px] w-full shrink-0">
+          <article className="min-w-0 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/[0.03]">
+            <h2 className="text-base font-semibold text-neutral-900">
+              Tendencia de ocupación
+            </h2>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              Evolución de uso de cabañas en los últimos 7 días.
+            </p>
+            <div className="mt-5 h-[240px] w-full">
               {rechartsMod ? (
-                <DashboardOccupancyChart recharts={rechartsMod} data={occupancyChartData} />
+                <DashboardOccupancyChart
+                  recharts={rechartsMod}
+                  data={occupancyChartData}
+                />
               ) : (
                 <div className="h-full w-full rounded-lg bg-neutral-100" aria-hidden />
               )}
             </div>
           </article>
 
-          <article className="min-w-0 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/[0.03] transition-shadow duration-200 hover:shadow-sm">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-neutral-900">Revenue Breakdown</h2>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  Compare booked, paid, and pending amounts at a glance.
-                </p>
-              </div>
-            </div>
-            <div className="mt-5 h-[240px] w-full shrink-0">
+          <article className="min-w-0 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/[0.03]">
+            <h2 className="text-base font-semibold text-neutral-900">
+              Desglose de ingresos
+            </h2>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              Comparativa de montos reservado, pagado y pendiente.
+            </p>
+            <div className="mt-5 h-[240px] w-full">
               {rechartsMod ? (
                 <DashboardRevenueChart
                   recharts={rechartsMod}
@@ -677,41 +635,68 @@ export default function DashboardPage() {
           </article>
         </section>
 
+        {/* Recent Reservations — real data */}
         <section className="grid gap-6 xl:grid-cols-3">
           <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/[0.03] xl:col-span-2">
-            <div className="mb-5">
-              <h2 className="text-base font-semibold text-neutral-900">Recent Reservations</h2>
-              <p className="mt-0.5 text-xs text-neutral-500">Latest booking activity snapshot.</p>
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-neutral-900">
+                  Reservas recientes
+                </h2>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Últimas 6 reservas de la propiedad.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push('/reservations')}
+                className="text-xs font-semibold text-neutral-500 underline-offset-4 hover:text-neutral-900 hover:underline"
+              >
+                Ver todas →
+              </button>
             </div>
 
             {recentReservations.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-neutral-200 text-left">
+                <table className="min-w-full divide-y divide-neutral-100 text-left">
                   <thead>
-                    <tr className="text-xs uppercase tracking-wide text-neutral-500">
-                      <th className="pb-3 pr-4 font-medium">Guest</th>
-                      <th className="pb-3 pr-4 font-medium">Room</th>
-                      <th className="pb-3 pr-4 font-medium">Status</th>
-                      <th className="pb-3 pr-4 font-medium">Date</th>
-                      <th className="pb-3 font-medium">Amount</th>
+                    <tr className="text-[10px] uppercase tracking-wide text-neutral-400">
+                      <th className="pb-3 pr-4 font-semibold">Huésped</th>
+                      <th className="pb-3 pr-4 font-semibold">Cabaña</th>
+                      <th className="pb-3 pr-4 font-semibold">Estado</th>
+                      <th className="pb-3 pr-4 font-semibold">Fecha</th>
+                      <th className="pb-3 font-semibold">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
-                    {recentReservations.map((reservation) => (
-                      <tr key={`${reservation.guest}-${reservation.room}`} className="text-sm text-neutral-700">
-                        <td className="py-3 pr-4 font-medium text-neutral-900">{reservation.guest}</td>
-                        <td className="py-3 pr-4">{reservation.room}</td>
+                    {recentReservations.map((r) => (
+                      <tr
+                        key={r.id}
+                        className="cursor-pointer text-sm text-neutral-700 hover:bg-neutral-50"
+                        onClick={() => router.push(`/reservations/${r.id}`)}
+                      >
+                        <td className="py-3 pr-4 font-medium text-neutral-900">
+                          {r.guest.firstName} {r.guest.lastName}
+                        </td>
+                        <td className="py-3 pr-4 text-neutral-600">
+                          {r.roomType.name}
+                        </td>
                         <td className="py-3 pr-4">
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                              statusClasses[reservation.status] ?? 'bg-neutral-100 text-neutral-700'
+                              reservationStatusClasses[r.status] ??
+                              'bg-neutral-100 text-neutral-700'
                             }`}
                           >
-                            {reservation.status}
+                            {reservationStatusLabel[r.status] ?? r.status}
                           </span>
                         </td>
-                        <td className="py-3 pr-4 text-neutral-600">{reservation.date}</td>
-                        <td className="py-3 font-medium text-neutral-900">{reservation.amount}</td>
+                        <td className="py-3 pr-4 text-neutral-500">
+                          {r.createdAt.slice(0, 10)}
+                        </td>
+                        <td className="py-3 font-semibold text-neutral-900 tabular-nums">
+                          {formatCurrency(Number(r.totalAmount))}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -719,23 +704,36 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="rounded-2xl bg-neutral-100 px-6 py-10 text-center text-sm text-neutral-500">
-                No reservations yet. New bookings will appear here.
+                No hay reservas aún. Las nuevas reservas aparecerán aquí.
               </div>
             )}
           </article>
 
           <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/[0.03]">
-            <h2 className="text-base font-semibold text-neutral-900">Alerts / Issues</h2>
-            <p className="mt-0.5 text-xs text-neutral-500">Operational monitoring</p>
-            <div className="mt-5 rounded-2xl bg-neutral-100 px-5 py-8 text-center">
-              <p className="text-sm font-medium text-neutral-600">
-                No issues detected. Your operations are running smoothly.
-              </p>
+            <h2 className="text-base font-semibold text-neutral-900">
+              Estado del sistema
+            </h2>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              Monitoreo operacional
+            </p>
+            <div className="mt-5 space-y-3">
+              <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
+                <span className="text-xs font-medium text-emerald-700">API</span>
+                <span className="text-xs font-semibold text-emerald-700">Activo ✓</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
+                <span className="text-xs font-medium text-emerald-700">Base de datos</span>
+                <span className="text-xs font-semibold text-emerald-700">Activo ✓</span>
+              </div>
+              <div className="mt-4 rounded-xl bg-neutral-100 px-4 py-4 text-center">
+                <p className="text-xs text-neutral-500">
+                  Sin alertas. Las operaciones funcionan correctamente.
+                </p>
+              </div>
             </div>
           </article>
         </section>
       </div>
-
     </AdminShell>
   );
 }
