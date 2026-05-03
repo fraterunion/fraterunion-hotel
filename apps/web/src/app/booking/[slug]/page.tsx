@@ -42,30 +42,32 @@ type Step = 'dates' | 'reserve' | 'success';
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-// Static gallery paths per cabin slug.
-// DB images (cabin.images) take priority when populated via admin.
-// Drop photos into /public/images/cabins/{slug}/ and add paths here.
-const CABIN_GALLERY: Record<string, string[]> = {
-  'casa-grande': [
-    '/images/cabins/casa-grande/hero.jpg',
-    '/images/cabins/casa-grande/gallery-01.jpg',
-    '/images/cabins/casa-grande/gallery-02.jpg',
-    '/images/cabins/casa-grande/gallery-03.jpg',
-    '/images/cabins/casa-grande/gallery-04.jpg',
-    '/images/cabins/casa-grande/gallery-05.jpg',
-    '/images/cabins/casa-grande/gallery-06.jpg',
-    '/images/cabins/casa-grande/gallery-07.jpg',
-  ],
-  girasoles: ['/images/los-vagones-hero.jpg'],
-  alcatraces: ['/images/los-vagones-hero.jpg'],
-  'cabana-del-aguila': ['/images/los-vagones-hero.jpg'],
-  'vagon-el-colorado': ['/images/los-vagones-hero.jpg'],
-  'cabana-del-pozo': ['/images/los-vagones-hero.jpg'],
-};
+function buildGalleryPaths(slug: string): string[] {
+  return [
+    `/images/cabins/${slug}/hero.jpg`,
+    `/images/cabins/${slug}/gallery-01.jpg`,
+    `/images/cabins/${slug}/gallery-02.jpg`,
+    `/images/cabins/${slug}/gallery-03.jpg`,
+    `/images/cabins/${slug}/gallery-04.jpg`,
+    `/images/cabins/${slug}/gallery-05.jpg`,
+    `/images/cabins/${slug}/gallery-06.jpg`,
+    `/images/cabins/${slug}/gallery-07.jpg`,
+  ];
+}
 
-function getCabinGallery(slug: string, images: CabinImage[]): string[] {
-  if (images.length > 0) return images.map((img) => img.url);
-  return CABIN_GALLERY[slug] ?? ['/images/los-vagones-hero.jpg'];
+async function probeImages(paths: string[]): Promise<string[]> {
+  const results = await Promise.all(
+    paths.map(
+      (path) =>
+        new Promise<string | null>((resolve) => {
+          const img = new window.Image();
+          img.onload = () => resolve(path);
+          img.onerror = () => resolve(null);
+          img.src = path;
+        }),
+    ),
+  );
+  return results.filter((r): r is string => r !== null);
 }
 
 function formatCurrency(value: string | number) {
@@ -124,6 +126,7 @@ export default function CabinDetailPage() {
   const [loadingCabin, setLoadingCabin] = useState(true);
 
   // Gallery state
+  const [gallery, setGallery] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState('');
   const [imgFadingOut, setImgFadingOut] = useState(false);
 
@@ -168,7 +171,6 @@ export default function CabinDetailPage() {
           setNotFound(true);
         } else {
           setCabin(found);
-          setSelectedImage(getCabinGallery(found.slug, found.images)[0]);
         }
       } catch {
         setNotFound(true);
@@ -178,6 +180,22 @@ export default function CabinDetailPage() {
     }
     load();
   }, [slug]);
+
+  useEffect(() => {
+    if (!cabin) return;
+    if (cabin.images.length > 0) {
+      const dbImages = cabin.images.map((img) => img.url);
+      setGallery(dbImages);
+      setSelectedImage(dbImages[0]);
+    } else {
+      probeImages(buildGalleryPaths(cabin.slug)).then((valid) => {
+        const result =
+          valid.length > 0 ? valid : ['/images/los-vagones-hero.jpg'];
+        setGallery(result);
+        setSelectedImage(result[0]);
+      });
+    }
+  }, [cabin]);
 
   function selectThumbnail(src: string) {
     if (src === selectedImage) return;
@@ -308,8 +326,6 @@ export default function CabinDetailPage() {
       </main>
     );
   }
-
-  const gallery = getCabinGallery(cabin.slug, cabin.images);
 
   // ── Success ──────────────────────────────────────────────────────────────────
   if (step === 'success' && reservation) {
