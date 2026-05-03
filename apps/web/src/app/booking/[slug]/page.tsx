@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { hotelConfig } from '@fraterunion/config';
 import { bookingCopy, reservationStatusEs } from '../../../content/booking-es';
+import { BookingCalendar } from '../../../components/BookingCalendar';
 
 type Amenity = { name: string };
 type CabinImage = { url: string; altText: string | null };
@@ -93,21 +94,6 @@ function nightsBetween(checkIn: string, checkOut: string): number {
   return Math.max(Math.ceil((b - a) / 86400000), 0);
 }
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function tomorrowStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function defaultCheckout(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 2);
-  return d.toISOString().slice(0, 10);
-}
 
 const inputCls =
   'w-full rounded-xl border border-[var(--cabin-border)] bg-[var(--cabin-bg)] px-4 py-3.5 text-sm text-[var(--cabin-ink)] placeholder-[var(--cabin-ink-faint)] outline-none transition focus:border-[var(--cabin-forest)] focus:ring-2 focus:ring-[var(--cabin-forest)]/20';
@@ -134,8 +120,8 @@ export default function CabinDetailPage() {
   const [step, setStep] = useState<Step>('dates');
 
   // Dates
-  const [checkIn, setCheckIn] = useState(tomorrowStr());
-  const [checkOut, setCheckOut] = useState(defaultCheckout());
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState('');
 
@@ -549,45 +535,20 @@ export default function CabinDetailPage() {
               {/* ── Dates step ── */}
               {step === 'dates' && (
                 <form onSubmit={handleCheckAvailability} className="space-y-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>
-                        {bookingCopy.search.arrival}
-                      </label>
-                      <input
-                        type="date"
-                        className={inputCls}
-                        value={checkIn}
-                        min={todayStr()}
-                        onChange={(e) => {
-                          setCheckIn(e.target.value);
-                          setAvailabilityError('');
-                          if (e.target.value >= checkOut) {
-                            const next = new Date(e.target.value);
-                            next.setDate(next.getDate() + 1);
-                            setCheckOut(next.toISOString().slice(0, 10));
-                          }
-                        }}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>
-                        {bookingCopy.search.departure}
-                      </label>
-                      <input
-                        type="date"
-                        className={inputCls}
-                        value={checkOut}
-                        min={checkIn}
-                        onChange={(e) => {
-                          setCheckOut(e.target.value);
-                          setAvailabilityError('');
-                        }}
-                        required
-                      />
-                    </div>
-                  </div>
+                  <BookingCalendar
+                    hotelSlug={hotelConfig.defaultHotelSlug}
+                    roomTypeSlug={cabin.slug}
+                    checkIn={checkIn}
+                    checkOut={checkOut}
+                    onCheckInChange={(v) => {
+                      setCheckIn(v);
+                      setAvailabilityError('');
+                    }}
+                    onCheckOutChange={(v) => {
+                      setCheckOut(v);
+                      setAvailabilityError('');
+                    }}
+                  />
 
                   {nights > 0 && (
                     <div className="rounded-xl bg-[var(--cabin-bg)] px-4 py-3">
@@ -611,7 +572,7 @@ export default function CabinDetailPage() {
 
                   <button
                     type="submit"
-                    disabled={checkingAvailability || nights < 1}
+                    disabled={checkingAvailability || !checkIn || !checkOut || nights < 1}
                     className={btnPrimary}
                   >
                     {checkingAvailability

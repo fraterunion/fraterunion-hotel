@@ -197,5 +197,9 @@ export const bookingCopy = {
     noTaxNote: 'Sin impuestos incluidos',
     notFound: 'Cabaña no encontrada.',
     notFoundCta: 'Ver todas las cabañas',
+    calendarLoading: 'Cargando disponibilidad…',
+    calendarError: 'No se pudo cargar el calendario.',
+    selectCheckIn: 'Selecciona tu fecha de llegada',
+    selectCheckOut: 'Ahora selecciona tu fecha de salida',
   },
 } as const;
