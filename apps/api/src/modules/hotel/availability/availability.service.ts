@@ -60,8 +60,9 @@ export class AvailabilityService {
       },
     });
 
+    // PENDING reservations are unpaid holds — they do not block inventory.
+    // Only confirmed or active stays consume availability.
     const activeReservationStatuses: ReservationStatus[] = [
-      ReservationStatus.PENDING,
       ReservationStatus.CONFIRMED,
       ReservationStatus.CHECKED_IN,
     ];
@@ -192,9 +193,9 @@ export class AvailabilityService {
         hotelId: hotel.id,
         roomTypeId: roomType.id,
         hotel: { tenantId: hotel.tenantId },
+        // PENDING (unpaid) reservations do not block calendar nights.
         status: {
           in: [
-            ReservationStatus.PENDING,
             ReservationStatus.CONFIRMED,
             ReservationStatus.CHECKED_IN,
           ],

@@ -113,6 +113,7 @@ export class ReservationsService {
       },
     });
 
+    // PENDING (unpaid) holds do not block inventory — only confirmed stays do.
     const overlappingReservations = await this.prisma.reservation.count({
       where: {
         hotelId: hotel.id,
@@ -122,7 +123,6 @@ export class ReservationsService {
         },
         status: {
           in: [
-            ReservationStatus.PENDING,
             ReservationStatus.CONFIRMED,
             ReservationStatus.CHECKED_IN,
           ],
@@ -515,10 +515,6 @@ export class ReservationsService {
       throw new BadRequestException('Only CONFIRMED reservations can be checked in');
     }
 
-    if (!reservation.assignedRoomId) {
-      throw new BadRequestException('Reservation must have an assigned room before check-in');
-    }
-
     return this.prisma.reservation.update({
       where: { id: reservation.id },
       data: {
@@ -688,22 +684,25 @@ export class ReservationsService {
       },
     });
 
-    const totalReservations = reservations.length;
+    // Exclude unpaid PENDING holds from operational counts.
+    const operational = reservations.filter(r => r.status !== 'PENDING');
+
+    const totalReservations = operational.length;
     const pendingReservations = reservations.filter(r => r.status === 'PENDING').length;
-    const confirmedReservations = reservations.filter(r => r.status === 'CONFIRMED').length;
-    const checkedInReservations = reservations.filter(r => r.status === 'CHECKED_IN').length;
-    const checkedOutReservations = reservations.filter(r => r.status === 'CHECKED_OUT').length;
-    const cancelledReservations = reservations.filter(r => r.status === 'CANCELLED').length;
+    const confirmedReservations = operational.filter(r => r.status === 'CONFIRMED').length;
+    const checkedInReservations = operational.filter(r => r.status === 'CHECKED_IN').length;
+    const checkedOutReservations = operational.filter(r => r.status === 'CHECKED_OUT').length;
+    const cancelledReservations = operational.filter(r => r.status === 'CANCELLED').length;
 
     const totalRevenuePaid = reservations.reduce(
       (sum, r) => sum + Number(r.amountPaid || 0),
       0,
     );
 
-    const totalRevenueBooked = reservations.reduce(
-      (sum, r) => sum + Number(r.totalAmount || 0),
-      0,
-    );
+    // Only count revenue from paid/operational reservations, not abandoned holds.
+    const totalRevenueBooked = operational
+      .filter(r => ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'].includes(r.status))
+      .reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
 
     const totalRevenuePending = Math.max(totalRevenueBooked - totalRevenuePaid, 0);
 

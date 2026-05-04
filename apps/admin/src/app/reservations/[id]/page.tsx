@@ -1,17 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AdminShell from '../../../components/admin/AdminShell';
 import SectionCard from '../../../components/admin/SectionCard';
 import StatusBadge from '../../../components/admin/StatusBadge';
-
-type Room = {
-  id: string;
-  roomNumber: string;
-  roomTypeId: string;
-  status: string;
-};
 
 type Payment = {
   id: string;
@@ -84,9 +77,7 @@ export default function ReservationDetailPage() {
   const reservationId = params?.id as string;
 
   const [reservation, setReservation] = useState<ReservationDetail | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  const [assigning, setAssigning] = useState(false);
   const [actioning, setActioning] = useState(false);
   const [error, setError] = useState('');
 
@@ -108,37 +99,23 @@ export default function ReservationDetailPage() {
     setError('');
 
     try {
-      const [reservationRes, roomsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/admin/reservations/${reservationId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-        fetch(`${API_BASE_URL}/admin/rooms`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-      ]);
+      const reservationRes = await fetch(
+        `${API_BASE_URL}/admin/reservations/${reservationId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
 
-      if (reservationRes.status === 401 || roomsRes.status === 401) {
+      if (reservationRes.status === 401) {
         clearAuthAndRedirect();
         return;
       }
 
       const reservationData = await reservationRes.json();
-      const roomsData = await roomsRes.json();
 
       if (!reservationRes.ok) {
         throw new Error(reservationData?.message || 'Failed to load reservation');
       }
 
-      if (!roomsRes.ok) {
-        throw new Error(roomsData?.message || 'Failed to load rooms');
-      }
-
       setReservation(reservationData);
-      setRooms(roomsData);
     } catch (err: any) {
       setError(err.message || 'Failed to load reservation');
     } finally {
@@ -151,56 +128,6 @@ export default function ReservationDetailPage() {
       loadData();
     }
   }, [reservationId]);
-
-  const compatibleRooms = useMemo(() => {
-    if (!reservation) return [];
-    return rooms.filter((room) => room.roomTypeId === reservation.roomType.id);
-  }, [rooms, reservation]);
-
-  async function handleAssignRoom(roomId: string) {
-    const token = localStorage.getItem('fu_admin_token');
-
-    if (!token || !reservation) {
-      router.push('/login');
-      return;
-    }
-
-    try {
-      setAssigning(true);
-      setError('');
-
-      const response = await fetch(
-        `${API_BASE_URL}/admin/reservations/${reservation.id}/assign-room`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            roomId: roomId || null,
-          }),
-        },
-      );
-
-      if (response.status === 401) {
-        clearAuthAndRedirect();
-        return;
-      }
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(data?.message || 'Failed to assign room');
-      }
-
-      await loadData();
-    } catch (err: any) {
-      setError(err.message || 'Failed to assign room');
-    } finally {
-      setAssigning(false);
-    }
-  }
 
   async function handleAction(action: 'check-in' | 'check-out') {
     const token = localStorage.getItem('fu_admin_token');
@@ -270,7 +197,7 @@ export default function ReservationDetailPage() {
   return (
     <AdminShell
       title={reservation.reservationCode}
-      subtitle="Reservation detail, guest information, payment history, room assignment, and operational actions."
+      subtitle="Reservation detail, guest information, payment history, and operational actions."
     >
       {error ? (
         <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -372,45 +299,15 @@ export default function ReservationDetailPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Room & assignment" subtitle="Room category and physical room allocation.">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-neutral-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                  Room type
-                </p>
-                <p className="mt-2 text-sm font-semibold text-neutral-900">
-                  {reservation.roomType.name}
-                </p>
-                <p className="mt-1 text-sm text-neutral-500">{reservation.roomType.slug}</p>
-              </div>
-
-              <div className="rounded-2xl bg-neutral-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                  Assigned room
-                </p>
-                <p className="mt-2 text-sm font-semibold text-neutral-900">
-                  {reservation.assignedRoom?.roomNumber || 'Unassigned'}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-neutral-500">
-                Assign physical room
-              </label>
-              <select
-                value={reservation.assignedRoom?.id || ''}
-                onChange={(e) => handleAssignRoom(e.target.value)}
-                disabled={assigning}
-                className="w-full rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-neutral-900"
-              >
-                <option value="">Unassigned</option>
-                {compatibleRooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    Room {room.roomNumber} ({room.status})
-                  </option>
-                ))}
-              </select>
+          <SectionCard title="Cabaña" subtitle="Tipo de cabaña reservado por el huésped.">
+            <div className="rounded-2xl bg-neutral-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                Cabaña
+              </p>
+              <p className="mt-2 text-sm font-semibold text-neutral-900">
+                {reservation.roomType.name}
+              </p>
+              <p className="mt-1 text-sm text-neutral-500">{reservation.roomType.slug}</p>
             </div>
           </SectionCard>
 

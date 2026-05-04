@@ -5,13 +5,6 @@ import { useRouter } from 'next/navigation';
 import AdminShell from '../../components/admin/AdminShell';
 import { apiFetch } from '../../lib/api';
 
-type Room = {
-  id: string;
-  roomNumber: string;
-  roomTypeId: string;
-  status: string;
-};
-
 type Reservation = {
   id: string;
   reservationCode: string;
@@ -37,10 +30,6 @@ type Reservation = {
     name: string;
     slug: string;
   };
-  assignedRoom?: {
-    id: string;
-    roomNumber: string;
-  } | null;
 };
 
 const reservationStatusStyle: Record<
@@ -51,7 +40,7 @@ const reservationStatusStyle: Record<
     bg: 'bg-amber-50',
     text: 'text-amber-700',
     dot: 'bg-amber-400',
-    label: 'Pendiente',
+    label: 'Pago pendiente',
   },
   CONFIRMED: {
     bg: 'bg-sky-50',
@@ -118,20 +107,23 @@ function formatCurrency(value: string | number) {
   }).format(Number(value || 0));
 }
 
+// 'OPERATIONAL' is a client-side sentinel: all statuses except PENDING.
+const OPERATIONAL_STATUSES = ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED', 'NO_SHOW'];
+
 const STATUS_FILTERS = [
-  { value: '', label: 'Todos' },
-  { value: 'PENDING', label: 'Pendiente' },
+  { value: 'OPERATIONAL', label: 'Operativas' },
   { value: 'CONFIRMED', label: 'Confirmada' },
   { value: 'CHECKED_IN', label: 'En estancia' },
   { value: 'CHECKED_OUT', label: 'Finalizada' },
   { value: 'CANCELLED', label: 'Cancelada' },
-  { value: 'NO_SHOW', label: 'No presentado' },
+  { value: 'PENDING', label: 'Pagos pendientes' },
+  { value: '', label: 'Todas' },
 ];
 
 const PAYMENT_FILTERS = [
   { value: '', label: 'Todos los pagos' },
-  { value: 'PENDING', label: 'Pago pendiente' },
   { value: 'PAID', label: 'Pagado' },
+  { value: 'PENDING', label: 'Pago pendiente' },
   { value: 'PARTIALLY_PAID', label: 'Pago parcial' },
   { value: 'FAILED', label: 'Fallido' },
 ];
@@ -139,13 +131,12 @@ const PAYMENT_FILTERS = [
 export default function ReservationsPage() {
   const router = useRouter();
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // Default view: operational reservations only (paid/confirmed, no unpaid holds).
+  const [statusFilter, setStatusFilter] = useState('OPERATIONAL');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [search, setSearch] = useState('');
 
@@ -155,7 +146,7 @@ export default function ReservationsPage() {
     router.push('/login');
   }
 
-  async function loadData(status?: string) {
+  async function loadData() {
     const token = localStorage.getItem('fu_admin_token');
     if (!token) { router.push('/login'); return; }
 
@@ -163,13 +154,8 @@ export default function ReservationsPage() {
     setError('');
 
     try {
-      const query = status ? `?status=${encodeURIComponent(status)}` : '';
-      const [resData, roomsData] = await Promise.all([
-        apiFetch<Reservation[]>(`/admin/reservations${query}`),
-        apiFetch<Room[]>('/admin/rooms'),
-      ]);
+      const resData = await apiFetch<Reservation[]>('/admin/reservations');
       setReservations(resData);
-      setRooms(roomsData);
     } catch (err: unknown) {
       if (err instanceof Error && err.message === 'Request failed') {
         clearAuth();
@@ -182,24 +168,9 @@ export default function ReservationsPage() {
   }
 
   useEffect(() => {
-    loadData(statusFilter);
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
-
-  async function handleAssignRoom(reservationId: string, roomId: string) {
-    setAssigningId(reservationId);
-    try {
-      await apiFetch(`/admin/reservations/${reservationId}/assign-room`, {
-        method: 'PATCH',
-        body: JSON.stringify({ roomId: roomId || null }),
-      });
-      await loadData(statusFilter);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al asignar cabaña');
-    } finally {
-      setAssigningId(null);
-    }
-  }
+  }, []);
 
   async function handleAction(
     reservationId: string,
@@ -210,7 +181,7 @@ export default function ReservationsPage() {
       await apiFetch(`/admin/reservations/${reservationId}/${action}`, {
         method: 'PATCH',
       });
-      await loadData(statusFilter);
+      await loadData();
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : `Error al ejecutar ${action}`,
@@ -231,7 +202,7 @@ export default function ReservationsPage() {
       await apiFetch(`/admin/reservations/${reservationId}/cancel`, {
         method: 'PATCH',
       });
-      await loadData(statusFilter);
+      await loadData();
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'No se pudo cancelar la reserva.',
@@ -241,9 +212,14 @@ export default function ReservationsPage() {
     }
   }
 
-  // Client-side filtering
   const filtered = useMemo(() => {
     let list = reservations;
+
+    if (statusFilter === 'OPERATIONAL') {
+      list = list.filter((r) => OPERATIONAL_STATUSES.includes(r.status));
+    } else if (statusFilter) {
+      list = list.filter((r) => r.status === statusFilter);
+    }
 
     if (paymentFilter) {
       list = list.filter((r) => r.paymentStatus === paymentFilter);
@@ -262,17 +238,17 @@ export default function ReservationsPage() {
     }
 
     return list;
-  }, [reservations, paymentFilter, search]);
+  }, [reservations, statusFilter, paymentFilter, search]);
 
   const stats = useMemo(() => {
-    const base = reservations;
+    const operational = reservations.filter((r) => OPERATIONAL_STATUSES.includes(r.status));
     return {
-      total: base.length,
-      pending: base.filter((r) => r.status === 'PENDING').length,
-      confirmed: base.filter((r) => r.status === 'CONFIRMED').length,
-      checkedIn: base.filter((r) => r.status === 'CHECKED_IN').length,
-      checkedOut: base.filter((r) => r.status === 'CHECKED_OUT').length,
-      paid: base
+      confirmed: operational.filter((r) => r.status === 'CONFIRMED').length,
+      checkedIn: operational.filter((r) => r.status === 'CHECKED_IN').length,
+      checkedOut: operational.filter((r) => r.status === 'CHECKED_OUT').length,
+      cancelled: operational.filter((r) => r.status === 'CANCELLED').length,
+      unpaidHolds: reservations.filter((r) => r.status === 'PENDING').length,
+      paid: reservations
         .filter((r) => r.paymentStatus === 'PAID')
         .reduce((sum, r) => sum + Number(r.amountPaid || 0), 0),
     };
@@ -281,17 +257,17 @@ export default function ReservationsPage() {
   return (
     <AdminShell
       title="Reservas"
-      subtitle="Gestiona el ciclo completo de cada reserva: confirmación, check-in y cobro."
+      subtitle="Reservas confirmadas y activas de la propiedad."
     >
       {/* KPIs */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="mb-6 grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          { label: 'Total', value: stats.total },
-          { label: 'Pendientes', value: stats.pending },
           { label: 'Confirmadas', value: stats.confirmed },
           { label: 'En estancia', value: stats.checkedIn },
           { label: 'Finalizadas', value: stats.checkedOut },
-          { label: 'Monto pagado', value: formatCurrency(stats.paid), wide: true },
+          { label: 'Canceladas', value: stats.cancelled },
+          { label: 'Sin pagar', value: stats.unpaidHolds },
+          { label: 'Monto pagado', value: formatCurrency(stats.paid) },
         ].map((kpi) => (
           <div
             key={kpi.label}
@@ -309,7 +285,6 @@ export default function ReservationsPage() {
 
       {/* Filters */}
       <div className="mb-5 flex flex-wrap gap-3">
-        {/* Search */}
         <div className="relative flex-1">
           <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400">
             🔍
@@ -323,7 +298,6 @@ export default function ReservationsPage() {
           />
         </div>
 
-        {/* Status filter */}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -336,7 +310,6 @@ export default function ReservationsPage() {
           ))}
         </select>
 
-        {/* Payment filter */}
         <select
           value={paymentFilter}
           onChange={(e) => setPaymentFilter(e.target.value)}
@@ -361,7 +334,7 @@ export default function ReservationsPage() {
         {loading ? (
           <div className="space-y-4 p-5">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-40 animate-pulse rounded-2xl bg-neutral-100" />
+              <div key={i} className="h-36 animate-pulse rounded-2xl bg-neutral-100" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -375,12 +348,7 @@ export default function ReservationsPage() {
             {filtered.map((res) => {
               const resSt = reservationStatusStyle[res.status];
               const paySt = paymentStatusStyle[res.paymentStatus];
-              const compatibleRooms = rooms.filter(
-                (r) => r.roomTypeId === res.roomType.id,
-              );
-              const canCancel = !['CANCELLED', 'CHECKED_OUT', 'NO_SHOW'].includes(
-                res.status,
-              );
+              const canCancel = !['CANCELLED', 'CHECKED_OUT', 'NO_SHOW'].includes(res.status);
 
               return (
                 <article key={res.id} className="p-5 transition hover:bg-neutral-50/60">
@@ -396,7 +364,7 @@ export default function ReservationsPage() {
                       </button>
                       {resSt && <StatusPill style={resSt} />}
                       {paySt && <StatusPill style={{ ...paySt }} />}
-                      <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-700">
+                      <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-600">
                         {res.roomType.name}
                       </span>
                     </div>
@@ -406,7 +374,7 @@ export default function ReservationsPage() {
                   </div>
 
                   {/* Data grid */}
-                  <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
                     <div className="rounded-xl bg-neutral-50 p-3">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
                         Huésped
@@ -442,25 +410,6 @@ export default function ReservationsPage() {
                       <p className="mt-0.5 text-xs text-neutral-500">
                         Pagado {formatCurrency(res.amountPaid)}
                       </p>
-                    </div>
-
-                    <div className="rounded-xl bg-neutral-50 p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                        Cabaña asignada
-                      </p>
-                      <select
-                        value={res.assignedRoom?.id ?? ''}
-                        onChange={(e) => handleAssignRoom(res.id, e.target.value)}
-                        disabled={assigningId === res.id}
-                        className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs outline-none transition focus:border-neutral-900 disabled:opacity-60"
-                      >
-                        <option value="">Sin asignar</option>
-                        {compatibleRooms.map((room) => (
-                          <option key={room.id} value={room.id}>
-                            {room.roomNumber} ({room.status})
-                          </option>
-                        ))}
-                      </select>
                     </div>
                   </div>
 
