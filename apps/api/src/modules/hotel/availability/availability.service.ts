@@ -100,7 +100,19 @@ export class AvailabilityService {
           },
         });
 
-        const availableCount = Math.max(totalRooms - overlappingReservations, 0);
+        const blockCount = await this.prisma.roomBlock.count({
+          where: {
+            hotelId: hotel.id,
+            roomTypeId: roomType.id,
+            hotel: { tenantId: hotel.tenantId },
+            startDate: { lt: checkOut },
+            endDate: { gt: checkIn },
+          },
+        });
+
+        const availableCount = blockCount > 0
+          ? 0
+          : Math.max(totalRooms - overlappingReservations, 0);
 
         return {
           id: roomType.id,
@@ -193,6 +205,17 @@ export class AvailabilityService {
       select: { checkInDate: true, checkOutDate: true },
     });
 
+    const blocks = await this.prisma.roomBlock.findMany({
+      where: {
+        hotelId: hotel.id,
+        roomTypeId: roomType.id,
+        hotel: { tenantId: hotel.tenantId },
+        startDate: { lt: monthEnd },
+        endDate: { gt: monthStart },
+      },
+      select: { startDate: true, endDate: true },
+    });
+
     const blockedNights: string[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const nightStart = new Date(Date.UTC(dto.year, dto.month - 1, d));
@@ -200,7 +223,10 @@ export class AvailabilityService {
       const overlapping = reservations.filter(
         (r) => r.checkInDate < nightEnd && r.checkOutDate > nightStart,
       ).length;
-      if (overlapping >= totalRooms) {
+      const isManuallyBlocked = blocks.some(
+        (b) => b.startDate < nightEnd && b.endDate > nightStart,
+      );
+      if (overlapping >= totalRooms || isManuallyBlocked) {
         blockedNights.push(
           `${dto.year}-${String(dto.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
         );

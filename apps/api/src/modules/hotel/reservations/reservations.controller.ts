@@ -91,4 +91,13 @@ export class ReservationsController {
   ) {
     return this.reservationsService.checkOut(user.tenantId, user.hotelId, id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('admin/reservations/:id/cancel')
+  async cancel(
+    @CurrentUser() user: CurrentUserType,
+    @Param('id') id: string,
+  ) {
+    return this.reservationsService.cancelReservation(user.tenantId, user.hotelId, id);
+  }
 }

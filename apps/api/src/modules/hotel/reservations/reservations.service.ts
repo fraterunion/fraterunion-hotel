@@ -616,6 +616,55 @@ export class ReservationsService {
     });
   }
 
+  async cancelReservation(
+    tenantId: string,
+    hotelId?: string | null,
+    reservationId?: string,
+  ) {
+    if (!hotelId) {
+      throw new NotFoundException('Hotel context not found');
+    }
+
+    const reservation = await this.prisma.reservation.findFirst({
+      where: {
+        id: reservationId,
+        hotelId,
+        hotel: { tenantId },
+      },
+      include: {
+        guest: true,
+        roomType: true,
+        assignedRoom: true,
+        payments: { orderBy: { createdAt: 'desc' } },
+        hotel: { select: { id: true, name: true, slug: true, currency: true } },
+      },
+    });
+
+    if (!reservation) {
+      throw new NotFoundException('Reservation not found');
+    }
+
+    if (reservation.status === ReservationStatus.CANCELLED) {
+      return reservation;
+    }
+
+    if (reservation.status === ReservationStatus.CHECKED_OUT) {
+      throw new BadRequestException('Cannot cancel a reservation that has already checked out');
+    }
+
+    return this.prisma.reservation.update({
+      where: { id: reservation.id },
+      data: { status: ReservationStatus.CANCELLED },
+      include: {
+        guest: true,
+        roomType: true,
+        assignedRoom: true,
+        payments: { orderBy: { createdAt: 'desc' } },
+        hotel: { select: { id: true, name: true, slug: true, currency: true } },
+      },
+    });
+  }
+
     async getReservationMetrics(
     tenantId: string,
     hotelId?: string | null,

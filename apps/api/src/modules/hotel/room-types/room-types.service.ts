@@ -160,6 +160,7 @@ export class RoomTypesService {
         capacityChildren: dto.capacityChildren,
         bedType: dto.bedType,
         sizeM2: dto.sizeM2,
+        status: dto.status,
       },
     });
   }

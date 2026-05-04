@@ -1,10 +1,12 @@
 import {
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
+import { RoomTypeStatus } from '@prisma/client';
 
 export class UpdateRoomTypeDto {
   @IsOptional()
@@ -42,4 +44,8 @@ export class UpdateRoomTypeDto {
   @IsInt()
   @Min(0)
   sizeM2?: number;
+
+  @IsOptional()
+  @IsEnum(RoomTypeStatus)
+  status?: RoomTypeStatus;
 }

@@ -28,6 +28,8 @@ enum UserStatus {
 enum RoomTypeStatus {
   ACTIVE
   INACTIVE
+  MAINTENANCE
+  HIDDEN
 }
 
 enum RoomStatus {
@@ -128,6 +130,7 @@ model Hotel {
   reservations  Reservation[]
   payments      Payment[]
   auditLogs     AuditLog[]
+  roomBlocks    RoomBlock[]
 
   @@index([tenantId])
   @@index([slug])
@@ -208,6 +211,7 @@ model RoomType {
   amenities         RoomTypeAmenity[]
   rooms             Room[]
   reservations      Reservation[]
+  roomBlocks        RoomBlock[]
 
   @@unique([hotelId, slug])
   @@index([hotelId])
@@ -369,4 +373,23 @@ model AuditLog {
   @@index([userId])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+model RoomBlock {
+  id          String    @id @default(cuid())
+  hotelId     String
+  roomTypeId  String
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  hotel       Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomType    RoomType  @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId])
+  @@index([roomTypeId])
+  @@index([startDate, endDate])
+  @@map("room_blocks")
 }

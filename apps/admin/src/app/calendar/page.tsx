@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminShell from '../../components/admin/AdminShell';
 import { apiFetch } from '../../lib/api';
@@ -22,6 +22,14 @@ type Reservation = {
   guest: { firstName: string; lastName: string };
 };
 
+type RoomBlock = {
+  id: string;
+  roomTypeId: string;
+  startDate: string;
+  endDate: string;
+  reason: string | null;
+};
+
 const DAYS_TO_SHOW = 21;
 
 function addDays(date: Date, n: number): Date {
@@ -32,10 +40,6 @@ function addDays(date: Date, n: number): Date {
 
 function toYMD(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function parseYMD(ymd: string): Date {
-  return new Date(ymd + 'T00:00:00Z');
 }
 
 function shortDate(date: Date): { weekday: string; day: string } {
@@ -49,30 +53,11 @@ function shortMonth(date: Date): string {
   return date.toLocaleDateString('es-MX', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
-const reservationStatusCell: Record<
-  string,
-  { bg: string; text: string; border: string }
-> = {
-  PENDING: {
-    bg: 'bg-amber-50',
-    text: 'text-amber-800',
-    border: 'border-amber-300',
-  },
-  CONFIRMED: {
-    bg: 'bg-sky-50',
-    text: 'text-sky-800',
-    border: 'border-sky-300',
-  },
-  CHECKED_IN: {
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-800',
-    border: 'border-emerald-300',
-  },
-  CHECKED_OUT: {
-    bg: 'bg-neutral-100',
-    text: 'text-neutral-500',
-    border: 'border-neutral-200',
-  },
+const reservationStatusCell: Record<string, { bg: string; text: string; border: string }> = {
+  PENDING: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-300' },
+  CONFIRMED: { bg: 'bg-sky-50', text: 'text-sky-800', border: 'border-sky-300' },
+  CHECKED_IN: { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-300' },
+  CHECKED_OUT: { bg: 'bg-neutral-100', text: 'text-neutral-500', border: 'border-neutral-200' },
 };
 
 const statusLabel: Record<string, string> = {
@@ -95,11 +80,12 @@ export default function CalendarPage() {
 
   const [cabins, setCabins] = useState<Cabin[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [blocks, setBlocks] = useState<RoomBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tooltip, setTooltip] = useState<{ res: Reservation; x: number; y: number } | null>(null);
+  const [blockingCell, setBlockingCell] = useState<string | null>(null);
 
-  // Start from today (UTC)
   const [startDate] = useState(() => {
     const d = new Date();
     return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -109,30 +95,32 @@ export default function CalendarPage() {
     return Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i));
   }, [startDate]);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     const token = localStorage.getItem('fu_admin_token');
     if (!token) { router.push('/login'); return; }
 
     Promise.all([
       apiFetch<Cabin[]>('/admin/room-types'),
       apiFetch<Reservation[]>('/admin/reservations'),
+      apiFetch<RoomBlock[]>('/admin/blocks'),
     ])
-      .then(([cabinsData, resData]) => {
+      .then(([cabinsData, resData, blocksData]) => {
         setCabins(cabinsData.filter((c) => c.status !== 'HIDDEN'));
         setReservations(resData.filter((r) => r.status !== 'CANCELLED'));
+        setBlocks(blocksData);
       })
       .catch(() => setError('No se pudo cargar el calendario.'))
       .finally(() => setLoading(false));
   }, [router]);
 
-  // Scroll to today column on load
+  useEffect(() => { loadData(); }, [loadData]);
+
   useEffect(() => {
     if (!loading && scrollRef.current) {
       scrollRef.current.scrollLeft = 0;
     }
   }, [loading]);
 
-  // For each cabin+date, find the active reservation (if any)
   function getCellInfo(cabinId: string, date: Date): CellInfo | null {
     const ymd = toYMD(date);
     const nextYmd = toYMD(addDays(date, 1));
@@ -141,7 +129,6 @@ export default function CalendarPage() {
       if (res.roomType.id !== cabinId) continue;
       const checkIn = res.checkInDate.slice(0, 10);
       const checkOut = res.checkOutDate.slice(0, 10);
-      // Night D is occupied if checkIn <= D < checkOut
       if (checkIn <= ymd && ymd < checkOut) {
         return {
           reservation: res,
@@ -153,7 +140,60 @@ export default function CalendarPage() {
     return null;
   }
 
-  // Group consecutive dates by month for the header
+  function getBlockInfo(cabinId: string, date: Date): RoomBlock | null {
+    const nightStart = date;
+    const nightEnd = addDays(date, 1);
+    for (const b of blocks) {
+      if (b.roomTypeId !== cabinId) continue;
+      const bStart = new Date(b.startDate);
+      const bEnd = new Date(b.endDate);
+      if (bStart < nightEnd && bEnd > nightStart) return b;
+    }
+    return null;
+  }
+
+  async function handleCellClick(cabinId: string, date: Date) {
+    const cell = getCellInfo(cabinId, date);
+    if (cell) {
+      router.push(`/reservations/${cell.reservation.id}`);
+      return;
+    }
+
+    const block = getBlockInfo(cabinId, date);
+    if (block) {
+      const confirmed = window.confirm(
+        `¿Desbloquear esta noche?${block.reason ? `\nMotivo: ${block.reason}` : ''}`,
+      );
+      if (!confirmed) return;
+      setBlockingCell(`${cabinId}-${toYMD(date)}`);
+      try {
+        await apiFetch(`/admin/blocks/${block.id}`, { method: 'DELETE' });
+        setBlocks((prev) => prev.filter((b) => b.id !== block.id));
+      } catch {
+        alert('Error al desbloquear. Intenta de nuevo.');
+      } finally {
+        setBlockingCell(null);
+      }
+      return;
+    }
+
+    const reason = window.prompt('Motivo del bloqueo (opcional):') ?? undefined;
+    const ymd = toYMD(date);
+    const nextYmd = toYMD(addDays(date, 1));
+    setBlockingCell(`${cabinId}-${ymd}`);
+    try {
+      const created = await apiFetch<RoomBlock>('/admin/blocks', {
+        method: 'POST',
+        body: JSON.stringify({ roomTypeId: cabinId, startDate: ymd, endDate: nextYmd, reason: reason || undefined }),
+      });
+      setBlocks((prev) => [...prev, created]);
+    } catch {
+      alert('Error al bloquear la noche. Intenta de nuevo.');
+    } finally {
+      setBlockingCell(null);
+    }
+  }
+
   const monthGroups = useMemo(() => {
     const groups: { label: string; count: number }[] = [];
     for (const date of dates) {
@@ -169,13 +209,13 @@ export default function CalendarPage() {
 
   const todayYmd = toYMD(startDate);
 
-  const CELL_W = 48; // px, matches w-12
-  const CABIN_COL_W = 160; // px
+  const CELL_W = 48;
+  const CABIN_COL_W = 160;
 
   return (
     <AdminShell
       title="Calendario"
-      subtitle="Vista de ocupación por cabaña · 21 días desde hoy."
+      subtitle="Vista de ocupación por cabaña · 21 días desde hoy. Haz clic en una celda libre para bloquearla."
     >
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -195,6 +235,7 @@ export default function CalendarPage() {
               { label: 'Confirmada', cls: 'bg-sky-50 border-sky-300 text-sky-800' },
               { label: 'En estancia', cls: 'bg-emerald-50 border-emerald-300 text-emerald-800' },
               { label: 'Finalizada', cls: 'bg-neutral-100 border-neutral-200 text-neutral-500' },
+              { label: 'Bloqueado', cls: 'bg-neutral-800 border-neutral-700 text-neutral-100' },
             ].map((item) => (
               <span
                 key={item.label}
@@ -244,9 +285,7 @@ export default function CalendarPage() {
                         isToday ? 'bg-neutral-900' : isWeekend ? 'bg-neutral-50' : '',
                       ].join(' ')}
                     >
-                      <span
-                        className={`text-[9px] font-semibold uppercase ${isToday ? 'text-neutral-400' : 'text-neutral-400'}`}
-                      >
+                      <span className={`text-[9px] font-semibold uppercase text-neutral-400`}>
                         {weekday.slice(0, 2)}
                       </span>
                       <span
@@ -268,10 +307,7 @@ export default function CalendarPage() {
                 cabins.map((cabin, rowIdx) => (
                   <div
                     key={cabin.id}
-                    className={[
-                      'flex',
-                      rowIdx % 2 === 1 ? 'bg-neutral-50/50' : 'bg-white',
-                    ].join(' ')}
+                    className={['flex', rowIdx % 2 === 1 ? 'bg-neutral-50/50' : 'bg-white'].join(' ')}
                   >
                     {/* Cabin name */}
                     <div
@@ -294,56 +330,50 @@ export default function CalendarPage() {
                       const isToday = ymd === todayYmd;
                       const isWeekend = [0, 6].includes(date.getUTCDay());
                       const cell = getCellInfo(cabin.id, date);
-                      const style =
-                        cell && reservationStatusCell[cell.reservation.status];
+                      const block = !cell ? getBlockInfo(cabin.id, date) : null;
+                      const resStyle = cell && reservationStatusCell[cell.reservation.status];
+                      const cellKey = `${cabin.id}-${ymd}`;
+                      const isBusy = blockingCell === cellKey;
 
                       return (
                         <div
                           key={ymd}
                           style={{ width: CELL_W, minWidth: CELL_W, height: 44 }}
                           className={[
-                            'relative border-b border-l border-neutral-100',
+                            'relative border-b border-l border-neutral-100 cursor-pointer',
                             isToday ? 'border-l-neutral-900 bg-neutral-50' : '',
-                            isWeekend && !isToday ? 'bg-neutral-50/60' : '',
-                            cell && style
-                              ? `${style.bg} cursor-pointer`
-                              : '',
+                            isWeekend && !isToday && !cell && !block ? 'bg-neutral-50/60' : '',
+                            cell && resStyle ? resStyle.bg : '',
+                            block ? 'bg-neutral-800' : '',
+                            isBusy ? 'opacity-50' : '',
                           ].join(' ')}
                           onMouseEnter={(e) => {
                             if (cell) {
                               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                              setTooltip({
-                                res: cell.reservation,
-                                x: rect.left + rect.width / 2,
-                                y: rect.top,
-                              });
+                              setTooltip({ res: cell.reservation, x: rect.left + rect.width / 2, y: rect.top });
                             }
                           }}
                           onMouseLeave={() => setTooltip(null)}
-                          onClick={() =>
-                            cell &&
-                            router.push(`/reservations/${cell.reservation.id}`)
-                          }
+                          onClick={() => !isBusy && handleCellClick(cabin.id, date)}
                         >
-                          {cell && style && (
+                          {cell && resStyle && (
                             <>
-                              {/* Left border accent */}
                               {cell.isStart && (
-                                <div
-                                  className={`absolute bottom-0 left-0 top-0 w-[3px] ${style.border.replace('border-', 'bg-')}`}
-                                />
+                                <div className={`absolute bottom-0 left-0 top-0 w-[3px] ${resStyle.border.replace('border-', 'bg-')}`} />
                               )}
-                              {/* Reservation code — only on start */}
                               {cell.isStart && (
                                 <div className="absolute inset-0 flex items-center overflow-hidden px-1.5">
-                                  <span
-                                    className={`truncate text-[9px] font-semibold ${style.text}`}
-                                  >
+                                  <span className={`truncate text-[9px] font-semibold ${resStyle.text}`}>
                                     {cell.reservation.guest.firstName}
                                   </span>
                                 </div>
                               )}
                             </>
+                          )}
+                          {block && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-[9px] font-semibold text-neutral-400">✕</span>
+                            </div>
                           )}
                         </div>
                       );
@@ -356,7 +386,7 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Tooltip — rendered in portal-like fixed position */}
+      {/* Tooltip */}
       {tooltip && (
         <div
           className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full"
@@ -383,7 +413,6 @@ export default function CalendarPage() {
               </span>
             </p>
           </div>
-          {/* Arrow */}
           <div className="mx-auto h-2 w-2 -translate-y-px rotate-45 border-b border-r border-neutral-200 bg-white" />
         </div>
       )}
