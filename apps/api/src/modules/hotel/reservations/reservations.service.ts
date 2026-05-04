@@ -84,6 +84,8 @@ export class ReservationsService {
         id: true,
         name: true,
         basePrice: true,
+        lowOccupancyPrice: true,
+        lowOccupancyThreshold: true,
         capacityAdults: true,
         capacityChildren: true,
       },
@@ -143,7 +145,14 @@ export class ReservationsService {
       throw new BadRequestException('No availability for selected room type');
     }
 
-    const baseAmount = Number(roomType.basePrice) * nights;
+    const totalOccupants = dto.adults + (dto.children ?? 0);
+    const nightlyRate =
+      roomType.lowOccupancyPrice != null &&
+      roomType.lowOccupancyThreshold != null &&
+      totalOccupants <= roomType.lowOccupancyThreshold
+        ? Number(roomType.lowOccupancyPrice)
+        : Number(roomType.basePrice);
+    const baseAmount = nightlyRate * nights;
     const taxPercentage = Number(hotel.settings?.taxPercentage || 0);
     const taxAmount = (baseAmount * taxPercentage) / 100;
 

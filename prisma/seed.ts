@@ -19,6 +19,8 @@ async function upsertRoomType(
     name: string;
     description: string;
     basePrice: number;
+    lowOccupancyPrice?: number;
+    lowOccupancyThreshold?: number;
     capacityAdults: number;
     capacityChildren: number;
     bedType: string;
@@ -33,6 +35,8 @@ async function upsertRoomType(
       name: rt.name,
       description: rt.description,
       basePrice: rt.basePrice,
+      lowOccupancyPrice: rt.lowOccupancyPrice ?? null,
+      lowOccupancyThreshold: rt.lowOccupancyThreshold ?? null,
       capacityAdults: rt.capacityAdults,
       capacityChildren: rt.capacityChildren,
       bedType: rt.bedType,
@@ -45,6 +49,8 @@ async function upsertRoomType(
       name: rt.name,
       description: rt.description,
       basePrice: rt.basePrice,
+      lowOccupancyPrice: rt.lowOccupancyPrice ?? null,
+      lowOccupancyThreshold: rt.lowOccupancyThreshold ?? null,
       capacityAdults: rt.capacityAdults,
       capacityChildren: rt.capacityChildren,
       bedType: rt.bedType,
@@ -270,6 +276,8 @@ async function main() {
       description:
         'Vagón construido en Nueva York en 1948, adaptado como habitación. Interior de madera, dos camas matrimoniales, pantalla plana con TV abierta, microondas y frigobar. Incluye espacio privado al aire libre con fogata.',
       basePrice: 1750.00,
+      lowOccupancyPrice: 1400.00,
+      lowOccupancyThreshold: 2,
       capacityAdults: 4,
       capacityChildren: 0,
       bedType: '2 matrimoniales',
@@ -298,6 +306,8 @@ async function main() {
       description:
         'Cabaña con una cama matrimonial y dos camas individuales en tapanco, con los pies de frente una con otra. Cuenta con pantalla plana con TV abierta, cafetera y microondas. Incluye espacio privado al aire libre con fogata.',
       basePrice: 1750.00,
+      lowOccupancyPrice: 1400.00,
+      lowOccupancyThreshold: 2,
       capacityAdults: 4,
       capacityChildren: 0,
       bedType: 'Matrimonial + 2 individuales en tapanco',

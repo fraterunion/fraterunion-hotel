@@ -11,6 +11,8 @@ type CabinType = {
   slug: string;
   description: string | null;
   basePrice: number | string;
+  lowOccupancyPrice: number | string | null;
+  lowOccupancyThreshold: number | null;
   capacityAdults: number;
   capacityChildren: number;
   bedType: string | null;
@@ -217,11 +219,18 @@ export default function BookingCatalogPage() {
                       <div className="mt-10 flex items-end justify-between">
                         <div>
                           <p className="text-2xl font-semibold tabular-nums text-[var(--cabin-ink)]">
-                            {formatCurrency(firstCabin.basePrice)}
+                            {firstCabin.lowOccupancyPrice
+                              ? `Desde ${formatCurrency(firstCabin.lowOccupancyPrice)}`
+                              : formatCurrency(firstCabin.basePrice)}
                           </p>
                           <p className="text-xs text-[var(--cabin-ink-faint)]">
                             {bookingCopy.catalog.perNight}
                           </p>
+                          {firstCabin.lowOccupancyPrice != null && firstCabin.lowOccupancyThreshold != null && (
+                            <p className="mt-0.5 text-[11px] text-[var(--cabin-ink-faint)]">
+                              {formatCurrency(firstCabin.basePrice)} para {firstCabin.lowOccupancyThreshold + 1}–{firstCabin.capacityAdults} personas
+                            </p>
+                          )}
                         </div>
                         <p className="flex items-center gap-2 text-sm font-semibold text-[var(--cabin-forest-deep)] transition-colors duration-200 group-hover:text-[var(--cabin-terra)]">
                           {bookingCopy.catalog.viewCabin}
@@ -265,11 +274,18 @@ export default function BookingCatalogPage() {
                             </h2>
                             <div className="shrink-0 text-right">
                               <p className="text-lg font-semibold tabular-nums text-[var(--cabin-ink)]">
-                                {formatCurrency(cabin.basePrice)}
+                                {cabin.lowOccupancyPrice
+                                  ? `Desde ${formatCurrency(cabin.lowOccupancyPrice)}`
+                                  : formatCurrency(cabin.basePrice)}
                               </p>
                               <p className="text-xs text-[var(--cabin-ink-faint)]">
                                 {bookingCopy.catalog.perNight}
                               </p>
+                              {cabin.lowOccupancyPrice != null && cabin.lowOccupancyThreshold != null && (
+                                <p className="mt-0.5 text-[10px] text-[var(--cabin-ink-faint)]">
+                                  {formatCurrency(cabin.basePrice)} · {cabin.lowOccupancyThreshold + 1}–{cabin.capacityAdults} p.
+                                </p>
+                              )}
                             </div>
                           </div>
 

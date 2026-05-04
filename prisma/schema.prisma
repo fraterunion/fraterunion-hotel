@@ -197,7 +197,9 @@ model RoomType {
   name              String
   slug              String
   description       String?
-  basePrice         Decimal            @db.Decimal(10, 2)
+  basePrice             Decimal            @db.Decimal(10, 2)
+  lowOccupancyPrice     Decimal?           @db.Decimal(10, 2)
+  lowOccupancyThreshold Int?
   capacityAdults    Int                @default(2)
   capacityChildren  Int                @default(0)
   bedType           String?

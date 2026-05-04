@@ -13,6 +13,8 @@ type Cabin = {
   slug: string;
   description: string | null;
   basePrice: string;
+  lowOccupancyPrice: string | null;
+  lowOccupancyThreshold: number | null;
   capacityAdults: number;
   capacityChildren: number;
   bedType: string | null;
@@ -73,7 +75,8 @@ export default function CabinEditPage() {
   const [capacityAdults, setCapacityAdults] = useState(2);
   const [capacityChildren, setCapacityChildren] = useState(0);
   const [basePrice, setBasePrice] = useState('');
-  const [extraPersonFee, setExtraPersonFee] = useState('');
+  const [lowOccupancyPrice, setLowOccupancyPrice] = useState('');
+  const [lowOccupancyThreshold, setLowOccupancyThreshold] = useState('');
   const [status, setStatus] = useState('ACTIVE');
 
   useEffect(() => {
@@ -90,6 +93,10 @@ export default function CabinEditPage() {
         setCapacityAdults(found.capacityAdults);
         setCapacityChildren(found.capacityChildren);
         setBasePrice(found.basePrice);
+        setLowOccupancyPrice(found.lowOccupancyPrice ?? '');
+        setLowOccupancyThreshold(
+          found.lowOccupancyThreshold != null ? String(found.lowOccupancyThreshold) : '',
+        );
         setStatus(found.status);
       })
       .catch(() => router.push('/cabins'))
@@ -111,6 +118,8 @@ export default function CabinEditPage() {
           capacityAdults: Number(capacityAdults),
           capacityChildren: Number(capacityChildren),
           basePrice: Number(basePrice),
+          ...(lowOccupancyPrice !== '' ? { lowOccupancyPrice: Number(lowOccupancyPrice) } : {}),
+          ...(lowOccupancyThreshold !== '' ? { lowOccupancyThreshold: Number(lowOccupancyThreshold) } : {}),
           status,
         }),
       });
@@ -239,7 +248,7 @@ export default function CabinEditPage() {
         {/* Pricing */}
         <Section
           title="Precios"
-          description="Tarifa base por noche. Los ajustes de temporada se configuran desde la API."
+          description="Tarifa base por noche. Configura baja ocupación para cobrar menos con pocos huéspedes."
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -258,15 +267,15 @@ export default function CabinEditPage() {
                   required
                 />
               </div>
+              <p className="mt-1.5 text-[11px] text-neutral-400">
+                Se aplica cuando hay más personas que el umbral de baja ocupación.
+              </p>
             </div>
 
+            <div />
+
             <div>
-              <label className={labelCls}>
-                Cargo por persona adicional
-                <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-[9px] text-neutral-400">
-                  próximamente
-                </span>
-              </label>
+              <label className={labelCls}>Tarifa baja ocupación (MXN / noche)</label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
                   $
@@ -275,13 +284,31 @@ export default function CabinEditPage() {
                   type="number"
                   min={0}
                   step={50}
-                  className={`${inputCls} pl-8 opacity-50`}
-                  value={extraPersonFee}
-                  onChange={(e) => setExtraPersonFee(e.target.value)}
-                  disabled
-                  placeholder="0"
+                  className={`${inputCls} pl-8`}
+                  value={lowOccupancyPrice}
+                  onChange={(e) => setLowOccupancyPrice(e.target.value)}
+                  placeholder="Ej. 1400"
                 />
               </div>
+              <p className="mt-1.5 text-[11px] text-neutral-400">
+                Dejar vacío para no usar tarifa diferenciada.
+              </p>
+            </div>
+
+            <div>
+              <label className={labelCls}>Aplica hasta cuántas personas</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                className={inputCls}
+                value={lowOccupancyThreshold}
+                onChange={(e) => setLowOccupancyThreshold(e.target.value)}
+                placeholder="Ej. 2"
+              />
+              <p className="mt-1.5 text-[11px] text-neutral-400">
+                Tarifa baja aplica si total de personas ≤ este número.
+              </p>
             </div>
           </div>
         </Section>

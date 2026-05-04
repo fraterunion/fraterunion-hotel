@@ -16,6 +16,8 @@ type CabinType = {
   slug: string;
   description: string | null;
   basePrice: number | string;
+  lowOccupancyPrice: number | string | null;
+  lowOccupancyThreshold: number | null;
   capacityAdults: number;
   capacityChildren: number;
   bedType: string | null;
@@ -282,9 +284,15 @@ export default function CabinDetailPage() {
   }
 
   const nights = nightsBetween(checkIn, checkOut);
-  const estimatedTotal = cabin
-    ? Number(cabin.basePrice) * Math.max(nights, 1)
+  const totalOccupants = adults + children;
+  const nightlyRate = cabin
+    ? cabin.lowOccupancyPrice != null &&
+      cabin.lowOccupancyThreshold != null &&
+      totalOccupants <= cabin.lowOccupancyThreshold
+      ? Number(cabin.lowOccupancyPrice)
+      : Number(cabin.basePrice)
     : 0;
+  const estimatedTotal = nightlyRate * Math.max(nights, 1);
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loadingCabin) {
@@ -472,7 +480,9 @@ export default function CabinDetailPage() {
             {cabin.name}
           </h1>
           <p className="mt-3 text-xl font-semibold tabular-nums text-[var(--lv-cream)]/85">
-            {formatCurrency(cabin.basePrice)}{' '}
+            {cabin.lowOccupancyPrice
+              ? `Desde ${formatCurrency(cabin.lowOccupancyPrice)}`
+              : formatCurrency(cabin.basePrice)}{' '}
             <span className="text-sm font-normal text-[var(--lv-cream)]/50">
               {bookingCopy.catalog.perNight}
             </span>
@@ -776,6 +786,39 @@ export default function CabinDetailPage() {
           )}
 
           <div className="border-t border-[var(--cabin-border-soft)]" />
+
+          {/* Tarifas por noche — only for tiered cabins */}
+          {cabin.lowOccupancyPrice != null && cabin.lowOccupancyThreshold != null && (
+            <>
+              <section>
+                <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--cabin-ink-faint)]">
+                  Tarifas por noche
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between rounded-xl bg-[var(--cabin-bg)] px-4 py-3">
+                    <p className="text-sm text-[var(--cabin-ink-soft)]">
+                      1–{cabin.lowOccupancyThreshold} personas
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-[var(--cabin-ink)]">
+                      {formatCurrency(cabin.lowOccupancyPrice)}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-[var(--cabin-bg)] px-4 py-3">
+                    <p className="text-sm text-[var(--cabin-ink-soft)]">
+                      {cabin.lowOccupancyThreshold + 1}–{cabin.capacityAdults} personas
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-[var(--cabin-ink)]">
+                      {formatCurrency(cabin.basePrice)}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-2.5 text-xs text-[var(--cabin-ink-faint)]">
+                  El precio se ajusta automáticamente al indicar el número de personas.
+                </p>
+              </section>
+              <div className="border-t border-[var(--cabin-border-soft)]" />
+            </>
+          )}
 
           {/* Tu espacio */}
           <section>
