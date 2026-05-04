@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreatePublicReservationDto } from './dto/create-public-reservation.dto';
 import {
+  PaymentRecordStatus,
   PaymentStatus,
   ReservationSource,
   ReservationStatus,
@@ -716,6 +717,178 @@ export class ReservationsService {
       totalRevenueBooked,
       totalRevenuePaid,
       totalRevenuePending,
+    };
+  }
+
+  async getDashboardMetrics(tenantId: string, hotelId?: string | null) {
+    if (!hotelId) throw new NotFoundException('Hotel context not found');
+
+    const now = new Date();
+    const ny = now.getUTCFullYear();
+    const nm = now.getUTCMonth();
+    const nd = now.getUTCDate();
+
+    const todayStart = new Date(Date.UTC(ny, nm, nd));
+    const todayEnd   = new Date(Date.UTC(ny, nm, nd + 1));
+    const weekStart  = new Date(Date.UTC(ny, nm, nd - now.getUTCDay())); // Sunday
+    const monthStart = new Date(Date.UTC(ny, nm, 1));
+    const monthEnd   = new Date(Date.UTC(ny, nm + 1, 1));
+    const yearStart  = new Date(Date.UTC(ny, 0, 1));
+    const yearEnd    = new Date(Date.UTC(ny + 1, 0, 1));
+
+    const daysInMonth = Math.round((monthEnd.getTime() - monthStart.getTime()) / 86400000);
+    const daysInYear  = Math.round((yearEnd.getTime()  - yearStart.getTime())  / 86400000);
+
+    // All succeeded payments for this hotel
+    const payments = await this.prisma.payment.findMany({
+      where: { hotelId, status: PaymentRecordStatus.SUCCEEDED },
+      select: { amount: true, paidAt: true },
+    });
+
+    const sumPaidIn = (from: Date, to: Date): number =>
+      payments
+        .filter((p) => p.paidAt != null && p.paidAt >= from && p.paidAt < to)
+        .reduce((s, p) => s + Number(p.amount), 0);
+
+    const revenueToday     = sumPaidIn(todayStart, todayEnd);
+    const revenueThisWeek  = sumPaidIn(weekStart,  todayEnd);
+    const revenueThisMonth = sumPaidIn(monthStart,  monthEnd);
+    const revenueLifetime  = payments.reduce((s, p) => s + Number(p.amount), 0);
+
+    // Operational reservations only (CONFIRMED / CHECKED_IN / CHECKED_OUT)
+    const reservations = await this.prisma.reservation.findMany({
+      where: {
+        hotelId,
+        hotel: { tenantId },
+        status: {
+          in: [
+            ReservationStatus.CONFIRMED,
+            ReservationStatus.CHECKED_IN,
+            ReservationStatus.CHECKED_OUT,
+          ],
+        },
+      },
+      select: {
+        roomTypeId: true,
+        checkInDate: true,
+        checkOutDate: true,
+        status: true,
+        amountPaid: true,
+      },
+    });
+
+    // Room types with room counts
+    const roomTypes = await this.prisma.roomType.findMany({
+      where: { hotelId, hotel: { tenantId } },
+      select: {
+        id: true,
+        name: true,
+        rooms: {
+          where: { status: { not: RoomStatus.OUT_OF_SERVICE } },
+          select: { id: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    function nightsInPeriod(ci: Date, co: Date, ps: Date, pe: Date): number {
+      const from = ci < ps ? ps : ci;
+      const to   = co > pe ? pe : co;
+      if (to <= from) return 0;
+      return Math.round((to.getTime() - from.getTime()) / 86400000);
+    }
+
+    // Cabin performance (sorted by revenue DESC)
+    const cabinPerformance = roomTypes
+      .map((rt) => {
+        const rtRes = reservations.filter((r) => r.roomTypeId === rt.id);
+        const revenue = rtRes.reduce((s, r) => s + Number(r.amountPaid || 0), 0);
+        const roomCount = rt.rooms.length;
+        const resNightsMonth = rtRes.reduce(
+          (s, r) => s + nightsInPeriod(r.checkInDate, r.checkOutDate, monthStart, monthEnd), 0,
+        );
+        const availNightsMonth = roomCount * daysInMonth;
+        const occupancyMonth = availNightsMonth > 0 ? resNightsMonth / availNightsMonth : 0;
+        return { id: rt.id, name: rt.name, revenue, reservations: rtRes.length, occupancyMonth };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // Overall occupancy
+    const totalRooms = roomTypes.reduce((s, rt) => s + rt.rooms.length, 0);
+    const occupancyThisMonth =
+      totalRooms * daysInMonth > 0
+        ? reservations.reduce((s, r) => s + nightsInPeriod(r.checkInDate, r.checkOutDate, monthStart, monthEnd), 0) /
+          (totalRooms * daysInMonth)
+        : 0;
+    const occupancyThisYear =
+      totalRooms * daysInYear > 0
+        ? reservations.reduce((s, r) => s + nightsInPeriod(r.checkInDate, r.checkOutDate, yearStart, yearEnd), 0) /
+          (totalRooms * daysInYear)
+        : 0;
+
+    // Chart: daily — last 30 days
+    const revenueByDay: { date: string; value: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const ds = new Date(Date.UTC(ny, nm, nd - i));
+      const de = new Date(Date.UTC(ny, nm, nd - i + 1));
+      revenueByDay.push({ date: ds.toISOString().slice(0, 10), value: sumPaidIn(ds, de) });
+    }
+
+    // Chart: weekly — last 12 weeks
+    const revenueByWeek: { week: string; value: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const ws = new Date(weekStart);
+      ws.setUTCDate(ws.getUTCDate() - i * 7);
+      const we = new Date(ws);
+      we.setUTCDate(we.getUTCDate() + 7);
+      revenueByWeek.push({ week: ws.toISOString().slice(0, 10), value: sumPaidIn(ws, we) });
+    }
+
+    // Chart: monthly — last 12 months
+    const revenueByMonth: { month: string; value: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const ms = new Date(Date.UTC(ny, nm - i, 1));
+      const me = new Date(Date.UTC(ny, nm - i + 1, 1));
+      revenueByMonth.push({ month: ms.toISOString().slice(0, 7), value: sumPaidIn(ms, me) });
+    }
+
+    // Chart: yearly
+    const yearMap = new Map<string, number>();
+    for (const p of payments) {
+      if (!p.paidAt) continue;
+      const yr = String(p.paidAt.getUTCFullYear());
+      yearMap.set(yr, (yearMap.get(yr) ?? 0) + Number(p.amount));
+    }
+    const revenueByYear = Array.from(yearMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([year, value]) => ({ year, value }));
+
+    // Today's operations
+    const currentlyCheckedIn = reservations.filter(
+      (r) => r.status === ReservationStatus.CHECKED_IN,
+    ).length;
+    const todayArrivals = reservations.filter(
+      (r) => r.checkInDate >= todayStart && r.checkInDate < todayEnd,
+    ).length;
+    const todayDepartures = reservations.filter(
+      (r) => r.checkOutDate >= todayStart && r.checkOutDate < todayEnd,
+    ).length;
+
+    return {
+      revenueToday,
+      revenueThisWeek,
+      revenueThisMonth,
+      revenueLifetime,
+      occupancyThisMonth,
+      occupancyThisYear,
+      cabinPerformance,
+      revenueByDay,
+      revenueByWeek,
+      revenueByMonth,
+      revenueByYear,
+      currentlyCheckedIn,
+      todayArrivals,
+      todayDepartures,
     };
   }
 }

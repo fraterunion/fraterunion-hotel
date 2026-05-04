@@ -47,6 +47,15 @@ export class ReservationsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('admin/metrics/dashboard')
+  async getDashboardMetrics(@CurrentUser() user: CurrentUserType) {
+    return this.reservationsService.getDashboardMetrics(
+      user.tenantId,
+      user.hotelId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('admin/reservations/:id')
   async findAdminReservationById(
     @CurrentUser() user: CurrentUserType,
