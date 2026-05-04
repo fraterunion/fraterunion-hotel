@@ -16,6 +16,7 @@ import { ReservationsModule } from './modules/hotel/reservations/reservations.mo
 import { PaymentsModule } from './modules/hotel/payments/payments.module';
 import { EmailModule } from './modules/core/email/email.module';
 import { BlocksModule } from './modules/hotel/blocks/blocks.module';
+import { BotModule } from './modules/bot/bot.module';
 
 
 @Module({
@@ -37,6 +38,7 @@ import { BlocksModule } from './modules/hotel/blocks/blocks.module';
     PaymentsModule,
     EmailModule,
     BlocksModule,
+    BotModule,
   ],
   controllers: [AppController],
 })
