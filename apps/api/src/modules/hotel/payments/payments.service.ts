@@ -49,8 +49,12 @@ export class PaymentsService {
       throw new BadRequestException('Reservation is already paid');
     }
 
-    const webAppUrl =
-      this.configService.get<string>('WEB_APP_URL') || 'http://localhost:3000';
+    const webAppUrl = this.configService.get<string>('WEB_APP_URL');
+    if (!webAppUrl) {
+      throw new Error(
+        'WEB_APP_URL is not set. Cannot build Stripe redirect URLs. Set this environment variable in Railway before processing payments.',
+      );
+    }
     const currency =
       this.configService.get<string>('STRIPE_CURRENCY') ||
       reservation.hotel.currency ||
