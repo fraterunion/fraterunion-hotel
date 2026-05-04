@@ -66,6 +66,15 @@ export class PaymentsService {
       guestId: reservation.guestId,
     };
 
+    const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+    const DESCRIPTOR_SUFFIX = 'RESERVA';
+
+    if (isProd) {
+      this.logger.log(
+        `[StripeFlow] statement_descriptor_suffix="${DESCRIPTOR_SUFFIX}" — bank statement will show account prefix + "* ${DESCRIPTOR_SUFFIX}"`,
+      );
+    }
+
     const session = await this.stripe.checkout.sessions.create({
       mode: 'payment',
       client_reference_id: reservation.id,
@@ -73,6 +82,11 @@ export class PaymentsService {
       cancel_url: `${webAppUrl}/booking/cancel?reservation_id=${reservation.id}`,
       customer_email: reservation.guest.email || undefined,
       metadata: sessionMetadata,
+      ...(isProd && {
+        payment_intent_data: {
+          statement_descriptor_suffix: DESCRIPTOR_SUFFIX,
+        },
+      }),
       line_items: [
         {
           quantity: 1,
