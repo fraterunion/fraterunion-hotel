@@ -387,6 +387,29 @@ export class PaymentsService {
               `Payment confirmation email failed for reservation ${reservationId}: ${message}`,
             );
           }
+
+          try {
+            await this.emailService.sendAdminReservationConfirmedEmail({
+              guestName: `${updatedReservation.guest.firstName} ${updatedReservation.guest.lastName}`,
+              guestEmail: updatedReservation.guest.email || '',
+              guestPhone: updatedReservation.guest.phone,
+              reservationCode: updatedReservation.reservationCode,
+              reservationId: updatedReservation.id,
+              roomTypeName: updatedReservation.roomType.name,
+              checkInDate: updatedReservation.checkInDate.toISOString().slice(0, 10),
+              checkOutDate: updatedReservation.checkOutDate.toISOString().slice(0, 10),
+              nights: updatedReservation.nights,
+              adults: updatedReservation.adults,
+              children: updatedReservation.children,
+              totalAmount: updatedReservation.totalAmount.toString(),
+              currency: updatedReservation.hotel.currency,
+            });
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.logger.error(
+              `Admin notification email failed for reservation ${reservationId}: ${message}`,
+            );
+          }
         }
       } else {
         const fresh = await this.prisma.reservation.findUnique({

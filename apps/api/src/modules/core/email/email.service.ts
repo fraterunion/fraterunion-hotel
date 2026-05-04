@@ -517,4 +517,328 @@ losvagonesmex@gmail.com · +52 55 8284 3604`;
       throw error;
     }
   }
+
+  async sendAdminReservationConfirmedEmail(params: {
+    guestName: string;
+    guestEmail: string;
+    guestPhone?: string | null;
+    reservationCode: string;
+    reservationId: string;
+    roomTypeName: string;
+    checkInDate: string;
+    checkOutDate: string;
+    nights: number;
+    adults: number;
+    children: number;
+    totalAmount: string | number;
+    currency: string;
+  }) {
+    const adminEmail = this.configService.get<string>('ADMIN_NOTIFICATION_EMAIL');
+    if (!adminEmail) {
+      this.logger.warn(
+        'ADMIN_NOTIFICATION_EMAIL not set — skipping admin notification for reservation ' +
+          params.reservationCode,
+      );
+      return;
+    }
+
+    if (!this.resend) {
+      this.logger.warn(
+        `RESEND_API_KEY not configured. Skipping admin notification for ${params.reservationCode}`,
+      );
+      return;
+    }
+
+    const adminAppUrl =
+      this.configService.get<string>('ADMIN_APP_URL') || 'https://admin.losvagones.mx';
+
+    const guestName       = esc(params.guestName);
+    const guestEmail      = esc(params.guestEmail);
+    const cabinName       = esc(params.roomTypeName);
+    const reservationCode = esc(params.reservationCode);
+    const checkInFmt      = formatDateEs(params.checkInDate);
+    const checkOutFmt     = formatDateEs(params.checkOutDate);
+    const amountFmt       = formatAmountMxn(params.totalAmount, params.currency);
+    const detailUrl       = `${adminAppUrl}/reservations/${params.reservationId}`;
+    const guestsLine      = params.children > 0
+      ? `${params.adults} adultos, ${params.children} menores`
+      : `${params.adults} adultos`;
+
+    const subject = `Nueva reserva confirmada — Los Vagones`;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f1ec;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f1ec;">
+  <tr>
+    <td align="center" style="padding:40px 16px;">
+
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:580px;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a1a1a;padding:36px 48px;text-align:center;">
+            <p style="margin:0;font-family:Georgia,serif;font-size:24px;letter-spacing:8px;
+                      color:#ffffff;text-transform:uppercase;font-weight:normal;">
+              Los Vagones
+            </p>
+            <p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                      letter-spacing:3px;color:#888888;text-transform:uppercase;">
+              Panel de Administraci&oacute;n
+            </p>
+          </td>
+        </tr>
+
+        <!-- Status bar -->
+        <tr>
+          <td style="background-color:#2a5025;padding:13px 48px;text-align:center;">
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;
+                      letter-spacing:3px;color:#8ecb82;text-transform:uppercase;">
+              &#10003;&nbsp; Nueva reserva confirmada
+            </p>
+          </td>
+        </tr>
+
+        <!-- Intro -->
+        <tr>
+          <td style="padding:36px 48px 24px;">
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;
+                      line-height:1.8;color:#555555;">
+              Se recibi&oacute; un pago y la siguiente reserva fue confirmada autom&aacute;ticamente.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Guest details card -->
+        <tr>
+          <td style="padding:0 48px 16px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#f9f7f4;border:1px solid #e8e3db;border-radius:4px;">
+              <tr>
+                <td style="padding:18px 24px 0;">
+                  <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;
+                            letter-spacing:3px;color:#999999;text-transform:uppercase;">
+                    Hu&eacute;sped
+                  </p>
+                </td>
+              </tr>
+              <tr><td style="padding:12px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Guest name -->
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Nombre</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1a1a1a;font-weight:bold;">${guestName}</td>
+                  </tr></table>
+                </td>
+              </tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Guest email -->
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Correo</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${guestEmail}</td>
+                  </tr></table>
+                </td>
+              </tr>
+
+              ${params.guestPhone ? `
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Tel&eacute;fono</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${esc(params.guestPhone)}</td>
+                  </tr></table>
+                </td>
+              </tr>` : ''}
+
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <!-- Guests count -->
+              <tr>
+                <td style="padding:14px 24px 18px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Hu&eacute;spedes</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${esc(guestsLine)}</td>
+                  </tr></table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Reservation details card -->
+        <tr>
+          <td style="padding:0 48px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#f9f7f4;border:1px solid #e8e3db;border-radius:4px;">
+              <tr>
+                <td style="padding:18px 24px 0;">
+                  <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;
+                            letter-spacing:3px;color:#999999;text-transform:uppercase;">
+                    Reserva
+                  </p>
+                </td>
+              </tr>
+              <tr><td style="padding:12px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Código -->
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">C&oacute;digo</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#1a1a1a;letter-spacing:1px;">${reservationCode}</td>
+                  </tr></table>
+                </td>
+              </tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Cabaña -->
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Caba&ntilde;a</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${cabinName}</td>
+                  </tr></table>
+                </td>
+              </tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Check-in -->
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Check-in</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${checkInFmt}</td>
+                  </tr></table>
+                </td>
+              </tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Check-out -->
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Check-out</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${checkOutFmt}</td>
+                  </tr></table>
+                </td>
+              </tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Noches -->
+              <tr>
+                <td style="padding:14px 24px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Noches</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${params.nights}</td>
+                  </tr></table>
+                </td>
+              </tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+
+              <!-- Total -->
+              <tr>
+                <td style="padding:14px 24px 20px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Total pagado</td>
+                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:bold;color:#1a1a1a;">${amountFmt}</td>
+                  </tr></table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- CTA -->
+        <tr>
+          <td style="padding:0 48px 48px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center">
+                  <a href="${detailUrl}"
+                     style="display:inline-block;background-color:#9b5c2a;color:#ffffff;
+                            font-family:Arial,Helvetica,sans-serif;font-size:13px;
+                            font-weight:bold;letter-spacing:2px;text-decoration:none;
+                            text-align:center;padding:15px 32px;border-radius:3px;
+                            text-transform:uppercase;">
+                    Ver reserva en el panel
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background-color:#1a1a1a;padding:28px 48px;text-align:center;">
+            <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                      letter-spacing:2px;color:#666666;text-transform:uppercase;">
+              Los Vagones &nbsp;&bull;&nbsp; Notificaci&oacute;n interna
+            </p>
+            <p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#444444;">
+              Este mensaje es solo para el equipo operador. No reenviar al hu&eacute;sped.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+
+    const text = `Nueva reserva confirmada — Los Vagones
+PANEL DE ADMINISTRACIÓN
+
+HUÉSPED
+-------
+Nombre    : ${params.guestName}
+Correo    : ${params.guestEmail}${params.guestPhone ? `\nTeléfono  : ${params.guestPhone}` : ''}
+Huéspedes : ${guestsLine}
+
+RESERVA
+-------
+Código    : ${params.reservationCode}
+Cabaña    : ${params.roomTypeName}
+Check-in  : ${checkInFmt}
+Check-out : ${checkOutFmt}
+Noches    : ${params.nights}
+Total     : ${amountFmt}
+
+Ver en el panel: ${detailUrl}
+
+—
+Los Vagones · Notificación interna`;
+
+    try {
+      const result = await this.resend.emails.send({
+        from: this.from,
+        to: adminEmail,
+        subject,
+        html,
+        text,
+      });
+
+      this.logger.log(
+        `Admin notification email sent to ${adminEmail} for reservation ${params.reservationCode}: ${JSON.stringify(result)}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send admin notification email for reservation ${params.reservationCode}: ${error?.message || error}`,
+        error?.stack,
+      );
+    }
+  }
 }
