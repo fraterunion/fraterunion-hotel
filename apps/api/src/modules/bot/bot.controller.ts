@@ -1,6 +1,13 @@
-import { Controller, Post, Body, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Post, Body, Req, Res, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Request, Response } from 'express';
+import { validateRequest } from 'twilio';
 import { BotService } from './bot.service';
+
+// Production webhook URL registered with Twilio.
+// Override via TWILIO_WEBHOOK_URL env var if the domain changes.
+const PRODUCTION_WEBHOOK_URL =
+  'https://fraterunionapi-production.up.railway.app/api/bot/whatsapp/webhook';
 
 function escapeXml(text: string): string {
   return text
@@ -13,10 +20,38 @@ function escapeXml(text: string): string {
 
 @Controller('bot')
 export class BotController {
-  constructor(private readonly botService: BotService) {}
+  private readonly logger = new Logger(BotController.name);
+
+  constructor(
+    private readonly botService: BotService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post('whatsapp/webhook')
-  async handleWhatsappWebhook(@Body() body: any, @Res() res: Response) {
+  async handleWhatsappWebhook(@Req() req: Request, @Body() body: any, @Res() res: Response) {
+    const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+
+    if (!authToken) {
+      if (isProduction) {
+        this.logger.error('TWILIO_AUTH_TOKEN not set in production — rejecting request');
+        return res.status(403).send('Forbidden');
+      }
+      // Non-production: allow through with a warning so local dev still works
+      this.logger.warn('TWILIO_AUTH_TOKEN not set — skipping signature validation (non-production)');
+    } else {
+      const signature = (req.headers['x-twilio-signature'] as string) ?? '';
+      const webhookUrl =
+        this.configService.get<string>('TWILIO_WEBHOOK_URL') ?? PRODUCTION_WEBHOOK_URL;
+
+      const isValid = validateRequest(authToken, signature, webhookUrl, body ?? {});
+
+      if (!isValid) {
+        this.logger.warn(`Twilio signature validation failed — request rejected`);
+        return res.status(403).send('Forbidden');
+      }
+    }
+
     const messageBody: string = body?.Body ?? '';
     const sender: string = body?.From ?? '';
 
