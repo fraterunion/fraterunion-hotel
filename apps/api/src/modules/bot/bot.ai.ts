@@ -14,11 +14,19 @@ const BOOKING_URL = 'https://losvagones.mx/booking';
 
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
+type BotCabin = {
+  name: string;
+  slug: string;
+  priceFrom: number;
+  capacityAdults?: number;
+};
+
 type BotSession = {
   checkInDate?: string;  // ISO YYYY-MM-DD — only when safely extractable
   checkOutDate?: string; // ISO YYYY-MM-DD — only when safely extractable
   rawDateText?: string;  // Original user text when ISO extraction not possible
   people?: number;
+  availableCabins?: BotCabin[]; // Last shown availability list for cabin selection
   updatedAt: number;
 };
 
@@ -58,6 +66,16 @@ Puedo ayudarte a:
 function isGreeting(message: string): boolean {
   const firstWord = message.trim().toLowerCase().split(/[\s,!.?¡¿]+/)[0];
   return GREETING_KEYWORDS.has(firstWord);
+}
+
+// ── Menu selection intent ─────────────────────────────────────────────────────
+
+function getMenuIntent(message: string): 'availability' | 'quote' | 'booking' | null {
+  const trimmed = message.trim();
+  if (trimmed === '1') return 'availability';
+  if (trimmed === '2') return 'quote';
+  if (trimmed === '3') return 'booking';
+  return null;
 }
 
 // ── Date intent ───────────────────────────────────────────────────────────────
@@ -146,7 +164,7 @@ Reglas:
 - No inventes disponibilidad, precios, políticas ni detalles de las cabañas
 - Si el usuario menciona fechas concretas de entrada y salida, usa la herramienta search_availability para consultar disponibilidad real
 - Si las fechas no están claras o faltan, pide la fecha de entrada y salida antes de buscar
-- Cuando haya cabañas disponibles, lístalas con su precio base y envía al usuario a reservar: ${BOOKING_URL}
+- Cuando haya cabañas disponibles, el sistema presentará la lista al usuario automáticamente — no tienes que formatearla
 - Si no hay disponibilidad, indícalo claramente y pregunta si quiere intentar con otras fechas
 - Mantén las respuestas cortas y enfocadas en la conversión
 
@@ -211,6 +229,29 @@ export class BotAiService {
     // A. Greeting → welcome, leave session intact
     if (isGreeting(input.message)) {
       return WELCOME_MESSAGE;
+    }
+
+    // A1. Cabin selection — user picks a numbered cabin from the last availability list.
+    // Only fires when the message is a bare integer (no extra text) to avoid swallowing
+    // messages like "2 personas" that should reach the people-intent handler.
+    if (session.availableCabins?.length && /^\d+$/.test(input.message.trim())) {
+      const n = parseInt(input.message.trim(), 10);
+      if (n >= 1 && n <= session.availableCabins.length) {
+        const cabin = session.availableCabins[n - 1];
+        return `Perfecto 🔥 Puedes reservar ${cabin.name} aquí:\n${BOOKING_URL}/${cabin.slug}\n\nTe recomiendo hacerlo cuanto antes para asegurar esas fechas.`;
+      }
+    }
+
+    // A2. Menu selection (1 / 2 / 3) → structured prompt, no OpenAI
+    const menuIntent = getMenuIntent(input.message);
+    if (menuIntent === 'availability') {
+      return 'Perfecto 👌\n\n👉 ¿Para qué fechas te gustaría hospedarte?';
+    }
+    if (menuIntent === 'quote') {
+      return 'Claro 🙌\n\n👉 Compárteme las fechas y número de personas para cotizarte.';
+    }
+    if (menuIntent === 'booking') {
+      return 'Excelente 🔥\n\n👉 Para reservar necesito fechas y número de personas.';
     }
 
     const dateDetected = isDateIntent(input.message);
@@ -319,8 +360,26 @@ export class BotAiService {
           );
 
           let toolResultContent: string;
+          let cabinListResponse: string | null = null;
+
           try {
             const availability = await this.botAvailabilityService.searchAvailability(args);
+
+            if (availability.availableCabins.length > 0) {
+              saveSession(input.from, { availableCabins: availability.availableCabins });
+              // Format deterministically — index order matches the stored session array exactly
+              const lines = availability.availableCabins
+                .map((c, i) => {
+                  const capacity = c.capacityAdults ? ` — hasta ${c.capacityAdults} personas` : '';
+                  return `${i + 1}. ${c.name} — $${Math.round(c.priceFrom)} MXN${capacity}`;
+                })
+                .join('\n');
+              cabinListResponse = `¡Hay disponibilidad para esas fechas! 🎉\n\n${lines}\n\nResponde con el número de la cabaña que prefieras.`;
+            } else {
+              // Clear any stale cabin list so old selections are no longer valid
+              saveSession(input.from, { availableCabins: undefined });
+            }
+
             toolResultContent = JSON.stringify(availability);
           } catch (err: any) {
             this.logger.error(`Availability fetch failed: ${err?.message}`);
@@ -329,23 +388,27 @@ export class BotAiService {
             });
           }
 
-          // Second call: feed tool result back and get the final Spanish reply
-          const second = await this.client.chat.completions.create({
-            model: 'gpt-4o-mini',
-            temperature: 0.4,
-            max_tokens: 400,
-            messages: [
-              ...messages,
-              firstMessage,
-              {
-                role: 'tool',
-                tool_call_id: toolCall.id,
-                content: toolResultContent,
-              },
-            ],
-          });
-
-          aiResult = second.choices[0]?.message?.content?.trim() ?? FALLBACK_RESPONSE;
+          if (cabinListResponse !== null) {
+            // Deterministic path — skip second OpenAI call entirely
+            aiResult = cabinListResponse;
+          } else {
+            // No-availability path — let OpenAI respond empathetically
+            const second = await this.client.chat.completions.create({
+              model: 'gpt-4o-mini',
+              temperature: 0.4,
+              max_tokens: 400,
+              messages: [
+                ...messages,
+                firstMessage,
+                {
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: toolResultContent,
+                },
+              ],
+            });
+            aiResult = second.choices[0]?.message?.content?.trim() ?? FALLBACK_RESPONSE;
+          }
         } else {
           aiResult = firstMessage.content?.trim() ?? FALLBACK_RESPONSE;
         }
