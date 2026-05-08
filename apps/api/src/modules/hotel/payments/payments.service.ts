@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import Stripe from 'stripe';
 import { EmailService } from '../../core/email/email.service';
+import { BotAnalyticsService } from '../../bot/bot.analytics.service';
 
 @Injectable()
 export class PaymentsService {
@@ -24,6 +25,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly analyticsService: BotAnalyticsService,
   ) {
     const secretKey =
       this.configService.get<string>('STRIPE_SECRET_KEY') || '';
@@ -410,6 +412,20 @@ export class PaymentsService {
               `Admin notification email failed for reservation ${reservationId}: ${message}`,
             );
           }
+
+          // Track payment completed — fire-and-forget, never blocks webhook response
+          this.analyticsService
+            .trackPaymentCompleted({
+              hotelId: updatedReservation?.hotelId ?? '',
+              reservationId,
+              metadata: {
+                totalAmount: Number(updatedReservation?.totalAmount ?? 0),
+                currency: updatedReservation?.hotel.currency ?? '',
+              },
+            })
+            .catch((err: any) =>
+              this.logger.error(`[BOT ANALYTICS] trackPaymentCompleted failed: ${err?.message}`),
+            );
         }
       } else {
         const fresh = await this.prisma.reservation.findUnique({

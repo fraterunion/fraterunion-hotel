@@ -4,11 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FollowUpStatus, PaymentStatus } from '@prisma/client';
 import twilio from 'twilio';
+import { BotAnalyticsService } from './bot.analytics.service';
 
 type TwilioClient = ReturnType<typeof twilio>;
 
 type FollowUpRow = {
   id: string;
+  hotelId: string;
   reservationId: string;
   whatsappFrom: string;
   guestFirstName: string;
@@ -42,6 +44,7 @@ export class BotFollowUpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly analyticsService: BotAnalyticsService,
   ) {
     this.enabled =
       configService.get<string>('FOLLOWUPS_ENABLED') === 'true';
@@ -236,6 +239,17 @@ export class BotFollowUpService {
     this.logger.log(
       `[BOT FOLLOWUP] Sent to ${row.whatsappFrom} (reservationId=${row.reservationId}, attempt=${row.sentCount + 1})`,
     );
+
+    this.analyticsService
+      .trackFollowUpSent({
+        hotelId: row.hotelId,
+        whatsappFrom: row.whatsappFrom,
+        reservationId: row.reservationId,
+        metadata: { attempt: row.sentCount + 1 },
+      })
+      .catch((err: any) =>
+        this.logger.error(`[BOT ANALYTICS] trackFollowUpSent failed: ${err?.message}`),
+      );
 
     // 6. Advance state
     const newSentCount = row.sentCount + 1;

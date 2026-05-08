@@ -97,6 +97,20 @@ enum FollowUpStatus {
   CANCELLED
 }
 
+enum BotEventType {
+  CONVERSATION_STARTED
+  DATES_PROVIDED
+  AVAILABILITY_SHOWN
+  CABIN_INFO_VIEWED
+  CABIN_SELECTED
+  CHECKOUT_STARTED
+  PEOPLE_PROVIDED
+  EMAIL_PROVIDED
+  CHECKOUT_LINK_GENERATED
+  FOLLOWUP_SENT
+  PAYMENT_COMPLETED
+}
+
 model Tenant {
   id          String        @id @default(cuid())
   name        String
@@ -138,6 +152,7 @@ model Hotel {
   auditLogs     AuditLog[]
   roomBlocks    RoomBlock[]
   botFollowUps  BotCheckoutFollowUp[]
+  botEvents     BotEvent[]
 
   @@index([tenantId])
   @@index([slug])
@@ -425,4 +440,26 @@ model BotCheckoutFollowUp {
   @@index([status, nextSendAt])
   @@index([reservationId])
   @@map("bot_checkout_follow_ups")
+}
+
+model BotEvent {
+  id            String       @id @default(cuid())
+  createdAt     DateTime     @default(now())
+
+  hotelId       String
+  whatsappFrom  String?
+
+  eventType     BotEventType
+
+  sessionId     String?
+  roomTypeId    String?
+  reservationId String?
+
+  metadata      Json?
+
+  hotel         Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("bot_events")
 }

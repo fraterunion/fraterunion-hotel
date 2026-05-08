@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
 import { BotAvailabilityService } from './bot.availability';
 import { BotFollowUpService } from './bot.follow-up.service';
+import { BotAnalyticsService } from './bot.analytics.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,9 +48,11 @@ type BotQuote = {
 };
 
 type BotSession = {
-  checkInDate?: string;   // ISO YYYY-MM-DD
-  checkOutDate?: string;  // ISO YYYY-MM-DD
-  rawDateText?: string;   // original text when ISO not extractable
+  sessionId?: string;          // unique per 30-min conversation window
+  conversationTracked?: boolean;
+  checkInDate?: string;        // ISO YYYY-MM-DD
+  checkOutDate?: string;       // ISO YYYY-MM-DD
+  rawDateText?: string;        // original text when ISO not extractable
   people?: number;
   availableCabins?: BotCabin[];
   catalogCache?: BotCatalogItem[];
@@ -68,7 +73,10 @@ const sessions = new Map<string, BotSession>();
 function getSession(from: string): BotSession {
   const existing = sessions.get(from);
   if (!existing || Date.now() - existing.updatedAt > SESSION_TTL_MS) {
-    const fresh: BotSession = { updatedAt: Date.now() };
+    const fresh: BotSession = {
+      sessionId: randomUUID(),
+      updatedAt: Date.now(),
+    };
     sessions.set(from, fresh);
     return fresh;
   }
@@ -303,15 +311,18 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 // ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable()
-export class BotAiService {
+export class BotAiService implements OnModuleInit {
   private readonly logger = new Logger(BotAiService.name);
   private readonly client: OpenAI | null;
   private readonly baseUrl: string;
+  private botHotelId: string | null = null;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly botAvailabilityService: BotAvailabilityService,
     private readonly botFollowUpService: BotFollowUpService,
+    private readonly analyticsService: BotAnalyticsService,
+    private readonly prisma: PrismaService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
@@ -330,14 +341,62 @@ export class BotAiService {
     }
   }
 
+  async onModuleInit(): Promise<void> {
+    try {
+      const hotel = await this.prisma.hotel.findUnique({
+        where: { slug: BOT_HOTEL_SLUG },
+        select: { id: true },
+      });
+      this.botHotelId = hotel?.id ?? null;
+      if (this.botHotelId) {
+        this.logger.log(`[BOT] Resolved hotel: ${BOT_HOTEL_SLUG} → ${this.botHotelId}`);
+      } else {
+        this.logger.warn(`[BOT] Hotel slug not found in DB: ${BOT_HOTEL_SLUG}`);
+      }
+    } catch (err: any) {
+      this.logger.error(`[BOT] Hotel ID lookup failed at init: ${err?.message}`);
+    }
+  }
+
+  // Fire-and-forget analytics — never throws, never blocks bot flow
+  private track(call: Promise<void>): void {
+    call.catch((err: any) =>
+      this.logger.error(`[BOT ANALYTICS] ${err?.message}`),
+    );
+  }
+
   async generateResponse(input: { from: string; message: string }): Promise<string> {
+    const hid = this.botHotelId ?? '';
+
     // ── 1. Restart intent — clears session entirely before anything else ────────
     if (isRestartIntent(input.message)) {
       sessions.delete(input.from);
+      // Pre-create fresh session with conversationTracked=true to prevent double-track
+      saveSession(input.from, { conversationTracked: true });
+      const freshSession = getSession(input.from);
+      this.track(
+        this.analyticsService.trackConversationStarted({
+          hotelId: hid,
+          whatsappFrom: input.from,
+          sessionId: freshSession.sessionId,
+        }),
+      );
       return WELCOME_MESSAGE;
     }
 
     const session = getSession(input.from);
+
+    // ── 1a. Track conversation start for fresh sessions ─────────────────────────
+    if (!session.conversationTracked) {
+      saveSession(input.from, { conversationTracked: true });
+      this.track(
+        this.analyticsService.trackConversationStarted({
+          hotelId: hid,
+          whatsappFrom: input.from,
+          sessionId: session.sessionId,
+        }),
+      );
+    }
 
     // ── 1b. Idempotency recovery — return existing checkout URL if already completed ──
     if (session.checkoutUrl && isYesReply(input.message)) {
@@ -354,6 +413,14 @@ export class BotAiService {
           return `Por favor indica el número de personas (por ejemplo: 2).`;
         }
         saveSession(input.from, { people: n, checkoutStep: 'full_name' });
+        this.track(
+          this.analyticsService.trackPeopleProvided({
+            hotelId: hid,
+            whatsappFrom: input.from,
+            sessionId: session.sessionId,
+            metadata: { adults: n },
+          }),
+        );
         return `Anotado, ${n} persona${n === 1 ? '' : 's'} 🙌\n\n👉 ¿Cuál es tu nombre completo?`;
       }
 
@@ -370,6 +437,13 @@ export class BotAiService {
           return `Ese correo no parece válido. ¿Me lo puedes enviar de nuevo?`;
         }
         saveSession(input.from, { guestEmail: msg, checkoutStep: 'confirm' });
+        this.track(
+          this.analyticsService.trackEmailProvided({
+            hotelId: hid,
+            whatsappFrom: input.from,
+            sessionId: session.sessionId,
+          }),
+        );
         const updated = getSession(input.from);
         const cabin = updated.selectedCabin;
 
@@ -500,6 +574,22 @@ export class BotAiService {
             return `Reserva creada, pero no pude generar el link de pago 😔\n\nCompleta el pago aquí:\n${fallbackUrl}`;
           }
 
+          // Track checkout link generated
+          const currentSession = getSession(input.from);
+          const q = currentSession.quote;
+          this.track(
+            this.analyticsService.trackCheckoutLinkGenerated({
+              hotelId: hid,
+              whatsappFrom: input.from,
+              sessionId: session.sessionId,
+              reservationId,
+              roomTypeId: selectedCabin.id,
+              metadata: q
+                ? { nights: q.nights, quoteAmount: q.total, currency: q.currency }
+                : undefined,
+            }),
+          );
+
           // Schedule follow-up — fire-and-forget, never blocks the checkout response
           this.botFollowUpService
             .scheduleFollowUp({
@@ -543,6 +633,15 @@ export class BotAiService {
         const cabin = session.availableCabins[infoN - 1];
         const catalog = await this.fetchCatalogCache(input.from);
         const detail = catalog.find((c) => c.slug === cabin.slug);
+        this.track(
+          this.analyticsService.trackCabinInfoViewed({
+            hotelId: hid,
+            whatsappFrom: input.from,
+            sessionId: session.sessionId,
+            roomTypeId: cabin.id,
+            metadata: { cabinName: cabin.name, position: infoN },
+          }),
+        );
         return this.formatCabinInfoResponse(cabin, detail, infoN, session.availableCabins.length);
       }
 
@@ -553,6 +652,24 @@ export class BotAiService {
           const cabin = session.availableCabins[n - 1];
           const bookingUrl = buildCabinBookingUrl(cabin.slug, session);
           saveSession(input.from, { selectedCabin: cabin, checkoutStep: 'people' });
+          this.track(
+            this.analyticsService.trackCabinSelected({
+              hotelId: hid,
+              whatsappFrom: input.from,
+              sessionId: session.sessionId,
+              roomTypeId: cabin.id,
+              metadata: { cabinName: cabin.name, priceFrom: cabin.priceFrom },
+            }),
+          );
+          this.track(
+            this.analyticsService.trackCheckoutStarted({
+              hotelId: hid,
+              whatsappFrom: input.from,
+              sessionId: session.sessionId,
+              roomTypeId: cabin.id,
+              metadata: { cabinName: cabin.name },
+            }),
+          );
           return (
             `🔥 Excelente elección: ${cabin.name}\n\n` +
             `Para generarte el link de pago necesito unos datos.\n\n` +
@@ -577,13 +694,28 @@ export class BotAiService {
       const isoDates = extractIsoDates(input.message);
       if (isoDates) {
         saveSession(input.from, isoDates);
-        return this.searchAndFormatAvailability(input.from, isoDates.checkInDate, isoDates.checkOutDate);
+        const nights = computeNights(isoDates.checkInDate, isoDates.checkOutDate);
+        this.track(
+          this.analyticsService.trackDatesProvided({
+            hotelId: hid,
+            whatsappFrom: input.from,
+            sessionId: session.sessionId,
+            metadata: { checkIn: isoDates.checkInDate, checkOut: isoDates.checkOutDate, nights },
+          }),
+        );
+        return this.searchAndFormatAvailability(
+          input.from,
+          isoDates.checkInDate,
+          isoDates.checkOutDate,
+          hid,
+          session.sessionId,
+        );
       }
 
       if (hasMonth(input.message)) {
         saveSession(input.from, { rawDateText: input.message });
         // OpenAI resolves the month+day to ISO and calls search_availability tool
-        return this.callOpenAi(input, '');
+        return this.callOpenAi(input, '', hid, session.sessionId);
       }
 
       return DATE_CONFIRM_RESPONSE;
@@ -596,18 +728,24 @@ export class BotAiService {
         saveSession(input.from, { people });
         const updated = getSession(input.from);
         if (updated.checkInDate && updated.checkOutDate) {
-          return this.searchAndFormatAvailability(input.from, updated.checkInDate, updated.checkOutDate);
+          return this.searchAndFormatAvailability(
+            input.from,
+            updated.checkInDate,
+            updated.checkOutDate,
+            hid,
+            session.sessionId,
+          );
         }
         if (updated.rawDateText) {
           const enriched = `El huésped quiere reservar para ${people} personas ${updated.rawDateText}. Verifica disponibilidad.`;
-          return this.callOpenAi({ from: input.from, message: enriched }, '');
+          return this.callOpenAi({ from: input.from, message: enriched }, '', hid, session.sessionId);
         }
         return `Gracias 🙌\n\n👉 ¿Para qué fechas te gustaría hospedarte?\nEjemplo: del 20 al 22 de junio`;
       }
     }
 
     // ── 7. Free-form → OpenAI ────────────────────────────────────────────────────
-    return this.callOpenAi(input, '');
+    return this.callOpenAi(input, '', hid, session.sessionId);
   }
 
   private formatCabinInfoResponse(
@@ -654,6 +792,8 @@ export class BotAiService {
     from: string,
     checkInDate: string,
     checkOutDate: string,
+    hotelId: string,
+    sessionId: string | undefined,
   ): Promise<string> {
     this.logger.log(`[BOT AVAIL] searching ${checkInDate}→${checkOutDate} for ${from}`);
     try {
@@ -663,6 +803,14 @@ export class BotAiService {
         return `Lo siento, no tenemos disponibilidad para esas fechas 😔\n\n¿Quieres intentar con otras fechas? Puedo revisar cualquier período.`;
       }
       saveSession(from, { availableCabins: availability.availableCabins, checkInDate, checkOutDate });
+      this.track(
+        this.analyticsService.trackAvailabilityShown({
+          hotelId,
+          whatsappFrom: from,
+          sessionId,
+          metadata: { cabinCount: availability.availableCabins.length },
+        }),
+      );
       return formatCabinList(availability.availableCabins);
     } catch (err: any) {
       this.logger.error(`[BOT AVAIL] search failed: ${err?.message}`);
@@ -778,6 +926,8 @@ export class BotAiService {
   private async callOpenAi(
     input: { from: string; message: string },
     prefix: string,
+    hotelId: string,
+    sessionId: string | undefined,
   ): Promise<string> {
     if (!this.client) {
       return prefix ? `${prefix}\n\n${FALLBACK_RESPONSE}` : FALLBACK_RESPONSE;
@@ -816,6 +966,17 @@ export class BotAiService {
             `[BotAiService] search_availability called: ${args.checkInDate} → ${args.checkOutDate} (from: ${input.from})`,
           );
 
+          // Track dates resolved by OpenAI
+          const nights = computeNights(args.checkInDate, args.checkOutDate);
+          this.track(
+            this.analyticsService.trackDatesProvided({
+              hotelId,
+              whatsappFrom: input.from,
+              sessionId,
+              metadata: { checkIn: args.checkInDate, checkOut: args.checkOutDate, nights },
+            }),
+          );
+
           let toolResultContent: string;
           let cabinListResponse: string | null = null;
 
@@ -829,6 +990,14 @@ export class BotAiService {
                 checkOutDate: args.checkOutDate,
               });
               cabinListResponse = formatCabinList(availability.availableCabins);
+              this.track(
+                this.analyticsService.trackAvailabilityShown({
+                  hotelId,
+                  whatsappFrom: input.from,
+                  sessionId,
+                  metadata: { cabinCount: availability.availableCabins.length },
+                }),
+              );
             } else {
               saveSession(input.from, {
                 availableCabins: undefined,

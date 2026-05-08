@@ -18,6 +18,7 @@ import { PaymentsModule } from './modules/hotel/payments/payments.module';
 import { EmailModule } from './modules/core/email/email.module';
 import { BlocksModule } from './modules/hotel/blocks/blocks.module';
 import { BotModule } from './modules/bot/bot.module';
+import { BotAnalyticsModule } from './modules/bot/bot.analytics.module';
 
 
 @Module({
@@ -41,6 +42,7 @@ import { BotModule } from './modules/bot/bot.module';
     EmailModule,
     BlocksModule,
     BotModule,
+    BotAnalyticsModule,
   ],
   controllers: [AppController],
 })
