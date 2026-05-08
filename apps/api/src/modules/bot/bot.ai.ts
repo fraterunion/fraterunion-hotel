@@ -23,15 +23,26 @@ type BotCabin = {
   capacityAdults?: number;
 };
 
+type BotCatalogItem = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  sizeM2?: number | null;
+  bedType?: string | null;
+  amenities: string[];
+};
+
 type BotSession = {
-  checkInDate?: string;  // ISO YYYY-MM-DD — only when safely extractable
-  checkOutDate?: string; // ISO YYYY-MM-DD — only when safely extractable
-  rawDateText?: string;  // Original user text when ISO extraction not possible
+  checkInDate?: string;   // ISO YYYY-MM-DD
+  checkOutDate?: string;  // ISO YYYY-MM-DD
+  rawDateText?: string;   // original text when ISO not extractable
   people?: number;
-  availableCabins?: BotCabin[]; // Last shown availability list for cabin selection
-  // Checkout flow fields
+  availableCabins?: BotCabin[];
+  catalogCache?: BotCatalogItem[];
+  // Checkout flow
   selectedCabin?: BotCabin;
-  checkoutStep?: 'full_name' | 'people' | 'email' | 'confirm';
+  checkoutStep?: 'people' | 'full_name' | 'email' | 'confirm';
   guestFirstName?: string;
   guestLastName?: string;
   guestEmail?: string;
@@ -57,47 +68,37 @@ function saveSession(from: string, updates: Partial<Omit<BotSession, 'updatedAt'
   sessions.set(from, { ...current, ...updates, updatedAt: Date.now() });
 }
 
-// ── Greeting ─────────────────────────────────────────────────────────────────
-
-const GREETING_KEYWORDS = new Set(['hola', 'buenas', 'buenos', 'hello', 'hi']);
+// ── Welcome ───────────────────────────────────────────────────────────────────
 
 const WELCOME_MESSAGE = `🔥 ¡Bienvenido a Los Vagones! 🚂
 
 Somos una experiencia única de glamping en La Marquesa 🌲
 
-Las fechas se llenan rápido — te recomiendo revisar disponibilidad cuanto antes 👇
+Para ayudarte a encontrar la mejor cabaña, dime tus fechas de entrada y salida.
 
-1️⃣ Ver disponibilidad
-2️⃣ Cotizar tu estancia
-3️⃣ Reservar ahora mismo
+Ejemplo: del 20 al 22 de junio`;
 
-¿Para qué fechas te gustaría hospedarte?`;
+// ── Restart intent ────────────────────────────────────────────────────────────
 
-// Prepared for future scheduled follow-up (requires outbound messaging — not yet wired):
-// const FOLLOW_UP_MESSAGE = `👀 ¿Sigues interesado en esas fechas?\n\nPuedo ayudarte a elegir la mejor opción según tu grupo.`;
+const RESTART_GREETING_KEYWORDS = new Set(['hola', 'buenas', 'buenos', 'hello', 'hi']);
 
-function isGreeting(message: string): boolean {
-  const firstWord = message.trim().toLowerCase().split(/[\s,!.?¡¿]+/)[0];
-  return GREETING_KEYWORDS.has(firstWord);
-}
+const RESTART_PHRASES = [
+  /\bempezar\s+de\s+(cero|nuevo)\b/,
+  /\bvolver\s+a\s+empezar\b/,
+  /\breiniciar\b/,
+  /\breset\b/,
+  /\bnueva\s+reserva\b/,
+  /\bquiero\s+empezar\s+de\s+nuevo\b/,
+];
 
-// ── Menu selection intent ─────────────────────────────────────────────────────
-
-function getMenuIntent(message: string): 'availability' | 'quote' | 'booking' | null {
-  const trimmed = message.trim();
-  if (trimmed === '1') return 'availability';
-  if (trimmed === '2') return 'quote';
-  if (trimmed === '3') return 'booking';
-  return null;
+function isRestartIntent(message: string): boolean {
+  const lower = message.trim().toLowerCase();
+  const firstWord = lower.split(/[\s,!.?¡¿]+/)[0];
+  if (RESTART_GREETING_KEYWORDS.has(firstWord)) return true;
+  return RESTART_PHRASES.some((re) => re.test(lower));
 }
 
 // ── Date intent ───────────────────────────────────────────────────────────────
-
-const DATE_INTENT_RESPONSE = `Perfecto 👌
-
-Déjame revisar disponibilidad para esas fechas…
-
-👉 ¿Para cuántas personas sería tu estancia?`;
 
 const DATE_CONFIRM_RESPONSE = `Perfecto 👌
 
@@ -110,10 +111,7 @@ const SPANISH_MONTHS = [
 
 function isDateIntent(message: string): boolean {
   const lower = message.toLowerCase();
-  const hasAl = /\bal\b/.test(lower);
-  const hasDel = /\bdel\b/.test(lower);
-  const hasNumbers = /\d/.test(lower);
-  return hasAl && (hasDel || hasNumbers);
+  return /\bal\b/.test(lower) && (/\bdel\b/.test(lower) || /\d/.test(lower));
 }
 
 function hasMonth(message: string): boolean {
@@ -131,15 +129,6 @@ function extractIsoDates(message: string): { checkInDate: string; checkOutDate: 
 
 // ── People intent ─────────────────────────────────────────────────────────────
 
-const PEOPLE_INTENT_PREFIX = `Perfecto 🙌
-
-Con esa información déjame revisar disponibilidad para ti ahora mismo…`;
-
-const NO_DATES_RESPONSE = `Claro, con gusto te ayudo 😊
-
-¿Para qué fechas te gustaría hospedarte?
-Ejemplo: del 20 al 22 de junio`;
-
 function isPeopleIntent(message: string): boolean {
   const lower = message.toLowerCase();
   if (/\d+\s*(personas?|adultos?)/.test(lower)) return true;
@@ -153,6 +142,25 @@ function extractPeople(message: string): number | null {
   if (m) return parseInt(m[1], 10);
   m = lower.match(/\b(?:somos|vamos|para)\s+(\d+)/);
   if (m) return parseInt(m[1], 10);
+  return null;
+}
+
+// ── Cabin info intent ─────────────────────────────────────────────────────────
+
+// Returns 1-based cabin index from "info 2", "información 3", "cuéntame de la 1", etc.
+function getCabinInfoNumber(message: string): number | null {
+  const lower = message.trim().toLowerCase();
+  const patterns = [
+    /^info\s*(\d+)$/,
+    /^informaci[oó]n\s+(\d+)$/,
+    /cu[eé]ntame.*?(?:de la|de)\s*(\d+)/,
+    /(?:quiero saber|m[aá]s info|mas info).*?(?:de la|de)\s*(\d+)/,
+    /m[aá]s informaci[oó]n.*?(?:de la|de)\s*(\d+)/,
+  ];
+  for (const re of patterns) {
+    const m = lower.match(re);
+    if (m) return parseInt(m[1], 10);
+  }
   return null;
 }
 
@@ -170,6 +178,12 @@ function isNoReply(message: string): boolean {
   return /^(no|nope|corregir|cambiar|cancelar)$/i.test(message.trim());
 }
 
+function computeNights(checkIn: string, checkOut: string): number {
+  return Math.ceil(
+    (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24),
+  );
+}
+
 // ── Cabin booking URL builder ─────────────────────────────────────────────────
 
 function buildCabinBookingUrl(slug: string, session: BotSession): string {
@@ -184,7 +198,23 @@ function buildCabinBookingUrl(slug: string, session: BotSession): string {
   return `${base}?${params.toString()}`;
 }
 
-// ── System prompt (built fresh per request for live date anchor) ──────────────
+// ── Cabin list formatter (shared by direct search and OpenAI tool path) ───────
+
+function formatCabinList(cabins: BotCabin[]): string {
+  const lines = cabins
+    .map((c, i) => {
+      const capacity = c.capacityAdults ? ` — hasta ${c.capacityAdults} personas` : '';
+      return `${i + 1}. ${c.name} — $${Math.round(c.priceFrom)} MXN/noche${capacity}`;
+    })
+    .join('\n');
+  return (
+    `🔥 ¡Buenas noticias! Sí tenemos disponibilidad para esas fechas.\n\n` +
+    `Estas son las opciones disponibles:\n\n${lines}\n\n` +
+    `Puedes responder con el número de la cabaña que prefieras o pedirme más información, por ejemplo: info 2`
+  );
+}
+
+// ── System prompt ─────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(): string {
   const today = new Date().toLocaleDateString('es-MX', {
@@ -266,7 +296,7 @@ export class BotAiService {
     const port = this.configService.get<string>('PORT') ?? '4000';
     const internalApiUrl = this.configService.get<string>('INTERNAL_API_URL');
     this.baseUrl = internalApiUrl ?? `http://127.0.0.1:${port}`;
-    this.logger.log(`[BOT VERSION] phase2-checkout-enabled — baseUrl: ${this.baseUrl}`);
+    this.logger.log(`[BOT VERSION] v3-refactored-flow — baseUrl: ${this.baseUrl}`);
 
     if (!this.configService.get<string>('STRIPE_SECRET_KEY')) {
       this.logger.error('[BOT VERSION] STRIPE_SECRET_KEY is not set — checkout sessions will fail');
@@ -274,32 +304,38 @@ export class BotAiService {
   }
 
   async generateResponse(input: { from: string; message: string }): Promise<string> {
-    const session = getSession(input.from);
-
-    // A. Greeting → welcome, leave session intact
-    if (isGreeting(input.message)) {
+    // ── 1. Restart intent — clears session entirely before anything else ────────
+    if (isRestartIntent(input.message)) {
+      sessions.delete(input.from);
       return WELCOME_MESSAGE;
     }
 
-    // A0. Checkout data collection — takes priority over all intent detection while active
+    const session = getSession(input.from);
+
+    // ── 1b. Idempotency recovery — return existing checkout URL if already completed ──
+    if (session.checkoutUrl && isYesReply(input.message)) {
+      return `🔥 Ya tienes un link activo para tu reserva:\n\n${session.checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona, escríbeme y te ayudo.`;
+    }
+
+    // ── 2. Active checkout flow ─────────────────────────────────────────────────
     if (session.checkoutStep) {
       const msg = input.message.trim();
-
-      if (session.checkoutStep === 'full_name') {
-        const parts = msg.split(/\s+/);
-        const firstName = parts[0];
-        const lastName = parts.slice(1).join(' ') || 'N/A';
-        saveSession(input.from, { guestFirstName: firstName, guestLastName: lastName, checkoutStep: 'people' });
-        return `Perfecto, ${firstName} 👋\n\n👉 ¿Para cuántas personas sería la estancia?`;
-      }
 
       if (session.checkoutStep === 'people') {
         const n = parseInt(msg, 10);
         if (!Number.isInteger(n) || n < 1) {
           return `Por favor indica el número de personas (por ejemplo: 2).`;
         }
-        saveSession(input.from, { people: n, checkoutStep: 'email' });
-        return `Anotado, ${n} persona${n === 1 ? '' : 's'} 🙌\n\n👉 ¿A qué correo quieres que enviemos la confirmación?`;
+        saveSession(input.from, { people: n, checkoutStep: 'full_name' });
+        return `Anotado, ${n} persona${n === 1 ? '' : 's'} 🙌\n\n👉 ¿Cuál es tu nombre completo?`;
+      }
+
+      if (session.checkoutStep === 'full_name') {
+        const parts = msg.split(/\s+/);
+        const firstName = parts[0];
+        const lastName = parts.slice(1).join(' ') || 'N/A';
+        saveSession(input.from, { guestFirstName: firstName, guestLastName: lastName, checkoutStep: 'email' });
+        return `Gracias, ${firstName} 👋\n\n👉 ¿A qué correo quieres que enviemos la confirmación?`;
       }
 
       if (session.checkoutStep === 'email') {
@@ -309,25 +345,42 @@ export class BotAiService {
         saveSession(input.from, { guestEmail: msg, checkoutStep: 'confirm' });
         const updated = getSession(input.from);
         const cabin = updated.selectedCabin;
+        const nights =
+          updated.checkInDate && updated.checkOutDate
+            ? computeNights(updated.checkInDate, updated.checkOutDate)
+            : null;
+        const estimatedTotal =
+          cabin && nights !== null ? Math.round(cabin.priceFrom * nights) : null;
         const dateRange =
           updated.checkInDate && updated.checkOutDate
-            ? `${updated.checkInDate} al ${updated.checkOutDate}`
+            ? `${updated.checkInDate} → ${updated.checkOutDate}`
             : updated.rawDateText ?? 'fechas por confirmar';
-        return (
+
+        let summary =
           `Perfecto 🙌\n\nConfirma que estos datos estén correctos:\n\n` +
           `- Cabaña: ${cabin?.name ?? '(sin seleccionar)'}\n` +
-          `- Fechas: ${dateRange}\n` +
-          `- Personas: ${updated.people}\n` +
+          `- Fechas: ${dateRange}\n`;
+        if (nights !== null) summary += `- Noches: ${nights}\n`;
+        summary += `- Personas: ${updated.people}\n`;
+        if (cabin) summary += `- Precio por noche: $${Math.round(cabin.priceFrom).toLocaleString('es-MX')} MXN\n`;
+        if (estimatedTotal !== null) {
+          summary += `- Total estimado: $${estimatedTotal.toLocaleString('es-MX')} MXN*\n`;
+        }
+        summary +=
           `- Nombre: ${updated.guestFirstName} ${updated.guestLastName}\n` +
-          `- Email: ${msg}\n\n` +
-          `Responde "sí" para generarte el link de pago, o "no" para corregir.`
-        );
+          `- Email: ${msg}\n\n`;
+        if (estimatedTotal !== null) {
+          summary += `*El total final puede incluir impuestos y cargos adicionales.\n\n`;
+        }
+        summary += `Responde "sí" para generarte el link de pago, o "no" para corregir.`;
+        return summary;
       }
 
       if (session.checkoutStep === 'confirm') {
         this.logger.log(`[BOT CHECKOUT] confirm branch entered for ${input.from} — reply: "${msg}"`);
+
         if (isYesReply(msg)) {
-          // Idempotency guard — reuse existing checkout link if already created
+          // Idempotency guard
           if (session.reservationId && session.checkoutUrl) {
             this.logger.log(`[BOT CHECKOUT] idempotency hit for ${input.from} — returning existing link`);
             return `🔥 Ya tienes un link activo para tu reserva:\n\n${session.checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona escríbeme y te genero uno nuevo.`;
@@ -348,9 +401,10 @@ export class BotAiService {
             baseUrl: this.baseUrl,
           });
 
-          // Validation — fall back to web booking link if any required value is missing
           if (!selectedCabin?.id || !checkInDate || !checkOutDate || !people || !guestFirstName || !guestLastName || !guestEmail) {
-            this.logger.warn(`[BOT CHECKOUT] failed: missing session fields — cabin=${selectedCabin?.id} ci=${checkInDate} co=${checkOutDate} people=${people} name=${guestFirstName} ${guestLastName} email=${guestEmail}`);
+            this.logger.warn(
+              `[BOT CHECKOUT] failed: missing session fields — cabin=${selectedCabin?.id} ci=${checkInDate} co=${checkOutDate} people=${people} name=${guestFirstName} ${guestLastName} email=${guestEmail}`,
+            );
             const fallbackUrl = selectedCabin ? buildCabinBookingUrl(selectedCabin.slug, session) : BOOKING_URL;
             saveSession(input.from, { checkoutStep: undefined });
             return `Tuve un problema generando tu link de pago 😔\n\nPuedes reservar directamente aquí:\n${fallbackUrl}`;
@@ -401,106 +455,164 @@ export class BotAiService {
 
           return `🔥 Ya quedó todo listo.\n\n👉 Aquí puedes pagar y asegurar tu cabaña:\n${checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona escríbeme y te genero uno nuevo.`;
         }
+
         if (isNoReply(msg)) {
           saveSession(input.from, {
-            checkoutStep: 'full_name',
+            checkoutStep: 'people',
+            people: undefined,
             guestFirstName: undefined,
             guestLastName: undefined,
             guestEmail: undefined,
-            people: undefined,
           });
-          return `Sin problema 😊 Empecemos de nuevo.\n\n👉 ¿Cuál es tu nombre completo?`;
+          return `Sin problema 😊 Empecemos de nuevo.\n\n👉 ¿Para cuántas personas sería la estancia?`;
         }
+
         return `Por favor responde "sí" para confirmar o "no" para corregir los datos.`;
       }
     }
 
-    // A1. Cabin selection — user picks a numbered cabin from the last availability list.
-    // Only fires when the message is a bare integer (no extra text) to avoid swallowing
-    // messages like "2 personas" that should reach the people-intent handler.
-    if (session.availableCabins?.length && /^\d+$/.test(input.message.trim())) {
-      const n = parseInt(input.message.trim(), 10);
-      if (n >= 1 && n <= session.availableCabins.length) {
-        const cabin = session.availableCabins[n - 1];
-        const bookingUrl = buildCabinBookingUrl(cabin.slug, session);
-        saveSession(input.from, { selectedCabin: cabin, checkoutStep: 'full_name' });
-        return `🔥 Excelente elección: ${cabin.name}\n\nPara generarte el link de pago necesito unos datos rápidos.\n\n👉 ¿Cuál es tu nombre completo?\n\nTambién puedes reservar aquí:\n${bookingUrl}`;
+    // ── 3. Cabin info intent (requires active cabin list) ───────────────────────
+    if (session.availableCabins?.length) {
+      const infoN = getCabinInfoNumber(input.message);
+      if (infoN !== null && infoN >= 1 && infoN <= session.availableCabins.length) {
+        const cabin = session.availableCabins[infoN - 1];
+        const catalog = await this.fetchCatalogCache(input.from);
+        const detail = catalog.find((c) => c.slug === cabin.slug);
+        return this.formatCabinInfoResponse(cabin, detail, infoN);
+      }
+
+      // ── 4. Cabin selection (bare integer) ─────────────────────────────────────
+      if (/^\d+$/.test(input.message.trim())) {
+        const n = parseInt(input.message.trim(), 10);
+        if (n >= 1 && n <= session.availableCabins.length) {
+          const cabin = session.availableCabins[n - 1];
+          const bookingUrl = buildCabinBookingUrl(cabin.slug, session);
+          saveSession(input.from, { selectedCabin: cabin, checkoutStep: 'people' });
+          return (
+            `🔥 Excelente elección: ${cabin.name}\n\n` +
+            `Para generarte el link de pago necesito unos datos.\n\n` +
+            `👉 ¿Para cuántas personas sería la estancia?\n\n` +
+            `También puedes reservar en línea:\n${bookingUrl}`
+          );
+        }
       }
     }
 
-    // A2. Menu selection (1 / 2 / 3) → structured prompt, no OpenAI
-    const menuIntent = getMenuIntent(input.message);
-    if (menuIntent === 'availability') {
-      return 'Perfecto 👌\n\n👉 ¿Para qué fechas te gustaría hospedarte?';
-    }
-    if (menuIntent === 'quote') {
-      return 'Claro 🙌\n\n👉 Compárteme las fechas y número de personas para cotizarte.';
-    }
-    if (menuIntent === 'booking') {
-      return 'Excelente 🔥\n\n👉 Para reservar necesito fechas y número de personas.';
-    }
-
+    // ── 5. Date intent → search availability immediately when ISO is extractable ─
     const dateDetected = isDateIntent(input.message);
     const peopleDetected = isPeopleIntent(input.message);
 
-    // B. Complete query: dates + people together → skip guided heuristics, let OpenAI handle it
-    if (dateDetected && peopleDetected) {
-      const people = extractPeople(input.message);
-      if (people !== null) saveSession(input.from, { people });
-      const isoDates = extractIsoDates(input.message);
-      if (isoDates) saveSession(input.from, isoDates);
-      return this.callOpenAi(input, '');
-    }
-
-    // C. Date intent only
     if (dateDetected) {
+      // Capture people count if included in the same message
+      if (peopleDetected) {
+        const people = extractPeople(input.message);
+        if (people !== null) saveSession(input.from, { people });
+      }
+
       const isoDates = extractIsoDates(input.message);
       if (isoDates) {
         saveSession(input.from, isoDates);
-      } else if (hasMonth(input.message)) {
+        return this.searchAndFormatAvailability(input.from, isoDates.checkInDate, isoDates.checkOutDate);
+      }
+
+      if (hasMonth(input.message)) {
         saveSession(input.from, { rawDateText: input.message });
-      } else {
-        // No month info — cannot store safely, ask to confirm
-        return DATE_CONFIRM_RESPONSE;
+        // OpenAI resolves the month+day to ISO and calls search_availability tool
+        return this.callOpenAi(input, '');
       }
 
-      // If people count already captured in a prior turn, proceed directly to availability
-      const updated = getSession(input.from);
-      if (updated.people) {
-        const dateRef =
-          updated.checkInDate && updated.checkOutDate
-            ? `del ${updated.checkInDate} al ${updated.checkOutDate}`
-            : updated.rawDateText!;
-        const enriched = `El huésped quiere reservar para ${updated.people} personas ${dateRef}. Verifica disponibilidad.`;
-        return this.callOpenAi({ from: input.from, message: enriched }, PEOPLE_INTENT_PREFIX);
-      }
-
-      return DATE_INTENT_RESPONSE;
+      return DATE_CONFIRM_RESPONSE;
     }
 
-    // D. People intent only
+    // ── 6. People intent only (no date in this message) ─────────────────────────
     if (peopleDetected) {
       const people = extractPeople(input.message);
       if (people !== null) {
         saveSession(input.from, { people });
-
-        if (session.checkInDate && session.checkOutDate) {
-          const enriched = `El huésped quiere reservar para ${people} personas del ${session.checkInDate} al ${session.checkOutDate}. Verifica disponibilidad.`;
-          return this.callOpenAi({ from: input.from, message: enriched }, PEOPLE_INTENT_PREFIX);
+        const updated = getSession(input.from);
+        if (updated.checkInDate && updated.checkOutDate) {
+          return this.searchAndFormatAvailability(input.from, updated.checkInDate, updated.checkOutDate);
         }
-
-        if (session.rawDateText) {
-          const enriched = `El huésped quiere reservar para ${people} personas ${session.rawDateText}. Verifica disponibilidad.`;
-          return this.callOpenAi({ from: input.from, message: enriched }, PEOPLE_INTENT_PREFIX);
+        if (updated.rawDateText) {
+          const enriched = `El huésped quiere reservar para ${people} personas ${updated.rawDateText}. Verifica disponibilidad.`;
+          return this.callOpenAi({ from: input.from, message: enriched }, '');
         }
-
-        return NO_DATES_RESPONSE;
+        return `Gracias 🙌\n\n👉 ¿Para qué fechas te gustaría hospedarte?\nEjemplo: del 20 al 22 de junio`;
       }
-      // Regex matched but extractPeople returned null — fall through to OpenAI
     }
 
-    // E. Free-form / unrecognised — let OpenAI handle it
+    // ── 7. Free-form → OpenAI ────────────────────────────────────────────────────
     return this.callOpenAi(input, '');
+  }
+
+  private formatCabinInfoResponse(
+    cabin: BotCabin,
+    detail: BotCatalogItem | undefined,
+    n: number,
+  ): string {
+    const description =
+      detail?.description ?? 'Una cabaña diseñada para una experiencia única en La Marquesa.';
+    const specs: string[] = [];
+    if (cabin.capacityAdults) specs.push(`Capacidad: hasta ${cabin.capacityAdults} personas`);
+    if (detail?.sizeM2) specs.push(`Espacio: ${detail.sizeM2} m²`);
+    if (detail?.bedType) specs.push(`Cama: ${detail.bedType}`);
+    specs.push(`Precio: $${Math.round(cabin.priceFrom).toLocaleString('es-MX')} MXN/noche`);
+    const specsBlock = specs.map((s) => `- ${s}`).join('\n');
+    const amenitiesLine =
+      detail?.amenities?.length ? `\nServicios: ${detail.amenities.join(' · ')}` : '';
+
+    return (
+      `🏕️ ${cabin.name}\n\n` +
+      `${description}\n\n` +
+      `${specsBlock}` +
+      `${amenitiesLine}\n\n` +
+      `Si te convence esta opción, responde con el número ${n} para continuar con tu reserva.`
+    );
+  }
+
+  private async searchAndFormatAvailability(
+    from: string,
+    checkInDate: string,
+    checkOutDate: string,
+  ): Promise<string> {
+    this.logger.log(`[BOT AVAIL] searching ${checkInDate}→${checkOutDate} for ${from}`);
+    try {
+      const availability = await this.botAvailabilityService.searchAvailability({ checkInDate, checkOutDate });
+      if (availability.availableCabins.length === 0) {
+        saveSession(from, { availableCabins: undefined, checkInDate, checkOutDate });
+        return `Lo siento, no tenemos disponibilidad para esas fechas 😔\n\n¿Quieres intentar con otras fechas? Puedo revisar cualquier período.`;
+      }
+      saveSession(from, { availableCabins: availability.availableCabins, checkInDate, checkOutDate });
+      return formatCabinList(availability.availableCabins);
+    } catch (err: any) {
+      this.logger.error(`[BOT AVAIL] search failed: ${err?.message}`);
+      return `No pude verificar disponibilidad en este momento 😔\n\nIntenta de nuevo o visita:\n${BOOKING_URL}`;
+    }
+  }
+
+  private async fetchCatalogCache(from: string): Promise<BotCatalogItem[]> {
+    const session = getSession(from);
+    if (session.catalogCache) return session.catalogCache;
+    const url = `${this.baseUrl}/api/public/catalog/${BOT_HOTEL_SLUG}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Catalog API returned HTTP ${res.status}`);
+      const data = (await res.json()) as any[];
+      const cache: BotCatalogItem[] = data.map((rt: any) => ({
+        id: rt.id as string,
+        slug: rt.slug as string,
+        name: rt.name as string,
+        description: rt.description as string | null | undefined,
+        sizeM2: rt.sizeM2 as number | null | undefined,
+        bedType: rt.bedType as string | null | undefined,
+        amenities: ((rt.amenities ?? []) as any[]).map((a: any) => a.name as string),
+      }));
+      saveSession(from, { catalogCache: cache });
+      return cache;
+    } catch (err: any) {
+      this.logger.error(`[BOT CATALOG] fetch failed: ${err?.message}`);
+      return [];
+    }
   }
 
   private async createPublicReservation(payload: {
@@ -574,7 +686,6 @@ export class BotAiService {
       const firstChoice = first.choices[0];
       const firstMessage = firstChoice.message;
 
-      // Model decided to call the search_availability tool
       if (firstChoice.finish_reason === 'tool_calls' && firstMessage.tool_calls?.length) {
         const toolCall = firstMessage.tool_calls[0];
 
@@ -600,16 +711,8 @@ export class BotAiService {
                 checkInDate: args.checkInDate,
                 checkOutDate: args.checkOutDate,
               });
-              // Format deterministically — index order matches the stored session array exactly
-              const lines = availability.availableCabins
-                .map((c, i) => {
-                  const capacity = c.capacityAdults ? ` — hasta ${c.capacityAdults} personas` : '';
-                  return `${i + 1}. ${c.name} — $${Math.round(c.priceFrom)} MXN${capacity}`;
-                })
-                .join('\n');
-              cabinListResponse = `🔥 ¡Buenas noticias! Sí tenemos disponibilidad para esas fechas.\n\nEstas son las opciones disponibles:\n\n${lines}\n\n💡 La más reservada suele ser la primera opción.\n\n👉 Responde con el número de la cabaña que prefieras y te ayudo a asegurarla antes de que se agote.`;
+              cabinListResponse = formatCabinList(availability.availableCabins);
             } else {
-              // Clear stale cabin list but preserve the resolved ISO dates
               saveSession(input.from, {
                 availableCabins: undefined,
                 checkInDate: args.checkInDate,
@@ -626,10 +729,8 @@ export class BotAiService {
           }
 
           if (cabinListResponse !== null) {
-            // Deterministic path — skip second OpenAI call entirely
             aiResult = cabinListResponse;
           } else {
-            // No-availability path — let OpenAI respond empathetically
             const second = await this.client.chat.completions.create({
               model: 'gpt-4o-mini',
               temperature: 0.4,
@@ -650,7 +751,6 @@ export class BotAiService {
           aiResult = firstMessage.content?.trim() ?? FALLBACK_RESPONSE;
         }
       } else {
-        // Model replied directly without calling a tool
         aiResult = firstMessage.content?.trim() ?? FALLBACK_RESPONSE;
       }
     } catch (error: any) {
