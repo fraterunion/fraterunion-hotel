@@ -51,17 +51,20 @@ function saveSession(from: string, updates: Partial<Omit<BotSession, 'updatedAt'
 
 const GREETING_KEYWORDS = new Set(['hola', 'buenas', 'buenos', 'hello', 'hi']);
 
-const WELCOME_MESSAGE = `¡Hola! 👋 Bienvenido a Los Vagones 🚂
+const WELCOME_MESSAGE = `🔥 ¡Bienvenido a Los Vagones! 🚂
 
-Somos una experiencia única en La Marquesa 🌲
+Somos una experiencia única de glamping en La Marquesa 🌲
 
-Puedo ayudarte a:
+Las fechas se llenan rápido — te recomiendo revisar disponibilidad cuanto antes 👇
 
 1️⃣ Ver disponibilidad
 2️⃣ Cotizar tu estancia
 3️⃣ Reservar ahora mismo
 
 ¿Para qué fechas te gustaría hospedarte?`;
+
+// Prepared for future scheduled follow-up (requires outbound messaging — not yet wired):
+// const FOLLOW_UP_MESSAGE = `👀 ¿Sigues interesado en esas fechas?\n\nPuedo ayudarte a elegir la mejor opción según tu grupo.`;
 
 function isGreeting(message: string): boolean {
   const firstWord = message.trim().toLowerCase().split(/[\s,!.?¡¿]+/)[0];
@@ -120,7 +123,7 @@ function extractIsoDates(message: string): { checkInDate: string; checkOutDate: 
 
 const PEOPLE_INTENT_PREFIX = `Perfecto 🙌
 
-Con esa información, déjame mostrarte las mejores opciones disponibles…`;
+Con esa información déjame revisar disponibilidad para ti ahora mismo…`;
 
 const NO_DATES_RESPONSE = `Claro, con gusto te ayudo 😊
 
@@ -238,7 +241,7 @@ export class BotAiService {
       const n = parseInt(input.message.trim(), 10);
       if (n >= 1 && n <= session.availableCabins.length) {
         const cabin = session.availableCabins[n - 1];
-        return `Perfecto 🔥 Puedes reservar ${cabin.name} aquí:\n${BOOKING_URL}/${cabin.slug}\n\nTe recomiendo hacerlo cuanto antes para asegurar esas fechas.`;
+        return `🔥 Excelente elección.\n\nEsta cabaña es de las más solicitadas para esas fechas, así que te recomiendo asegurarla lo antes posible para no perderla.\n\n👉 Aquí puedes reservar en menos de 1 minuto:\n${BOOKING_URL}/${cabin.slug}\n\nSi quieres, puedo ayudarte paso a paso.`;
       }
     }
 
@@ -374,7 +377,7 @@ export class BotAiService {
                   return `${i + 1}. ${c.name} — $${Math.round(c.priceFrom)} MXN${capacity}`;
                 })
                 .join('\n');
-              cabinListResponse = `¡Hay disponibilidad para esas fechas! 🎉\n\n${lines}\n\nResponde con el número de la cabaña que prefieras.`;
+              cabinListResponse = `🔥 ¡Buenas noticias! Sí tenemos disponibilidad para esas fechas.\n\nEstas son las opciones disponibles:\n\n${lines}\n\n💡 La más reservada suele ser la primera opción.\n\n👉 Responde con el número de la cabaña que prefieras y te ayudo a asegurarla antes de que se agote.`;
             } else {
               // Clear any stale cabin list so old selections are no longer valid
               saveSession(input.from, { availableCabins: undefined });
