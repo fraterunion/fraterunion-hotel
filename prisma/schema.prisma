@@ -151,8 +151,9 @@ model Hotel {
   payments      Payment[]
   auditLogs     AuditLog[]
   roomBlocks    RoomBlock[]
-  botFollowUps  BotCheckoutFollowUp[]
-  botEvents     BotEvent[]
+  botFollowUps       BotCheckoutFollowUp[]
+  botEvents          BotEvent[]
+  checkoutShortLinks CheckoutShortLink[]
 
   @@index([tenantId])
   @@index([slug])
@@ -342,8 +343,9 @@ model Reservation {
   guest            Guest               @relation(fields: [guestId], references: [id], onDelete: Restrict)
   roomType         RoomType            @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
   assignedRoom     Room?               @relation("AssignedRoomReservations", fields: [assignedRoomId], references: [id], onDelete: SetNull)
-  payments         Payment[]
-  botFollowUps     BotCheckoutFollowUp[]
+  payments          Payment[]
+  botFollowUps      BotCheckoutFollowUp[]
+  checkoutShortLink CheckoutShortLink?
 
   @@index([hotelId])
   @@index([guestId])
@@ -372,6 +374,7 @@ model Payment {
 
   hotel              Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   reservation        Reservation          @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  checkoutShortLink  CheckoutShortLink?
 
   @@index([hotelId])
   @@index([reservationId])
@@ -462,4 +465,32 @@ model BotEvent {
   @@index([hotelId, createdAt])
   @@index([eventType, createdAt])
   @@map("bot_events")
+}
+
+model CheckoutShortLink {
+  id            String    @id @default(cuid())
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  code          String    @unique
+
+  hotelId       String
+
+  reservationId String?   @unique
+  paymentId     String?   @unique
+
+  stripeUrl     String
+
+  clickCount    Int       @default(0)
+  lastClickedAt DateTime?
+
+  expiresAt     DateTime?
+
+  hotel         Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  payment       Payment?     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, createdAt])
+  @@map("checkout_short_links")
 }

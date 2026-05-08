@@ -15,6 +15,7 @@ import {
 import Stripe from 'stripe';
 import { EmailService } from '../../core/email/email.service';
 import { BotAnalyticsService } from '../../bot/bot.analytics.service';
+import { CheckoutShortLinksService } from '../checkout-short-links/checkout-short-links.service';
 
 @Injectable()
 export class PaymentsService {
@@ -26,6 +27,7 @@ export class PaymentsService {
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
     private readonly analyticsService: BotAnalyticsService,
+    private readonly shortLinksService: CheckoutShortLinksService,
   ) {
     const secretKey =
       this.configService.get<string>('STRIPE_SECRET_KEY') || '';
@@ -127,8 +129,27 @@ export class PaymentsService {
       `[StripeFlow] Payment row created payment.id=${paymentRow.id} reservationId=${paymentRow.reservationId} providerSessionId=${paymentRow.providerSessionId} metadata.checkoutSessionId=${session.id} (must match webhook session.id)`,
     );
 
+    const stripeUrl = session.url;
+
+    if (this.shortLinksService.isEnabled && stripeUrl) {
+      try {
+        const shortUrl = await this.shortLinksService.createShortLink({
+          hotelId: reservation.hotelId,
+          stripeUrl,
+          reservationId: reservation.id,
+          paymentId: paymentRow.id,
+        });
+        this.logger.log(`[StripeFlow] Short link created: ${shortUrl}`);
+        return { checkoutUrl: shortUrl, sessionId: session.id };
+      } catch (err: any) {
+        this.logger.error(
+          `[StripeFlow] Short link creation failed — falling back to raw Stripe URL: ${err?.message}`,
+        );
+      }
+    }
+
     return {
-      checkoutUrl: session.url,
+      checkoutUrl: stripeUrl,
       sessionId: session.id,
     };
   }
