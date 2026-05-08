@@ -1,0 +1,10 @@
+{
+  "name": "Los Vagones",
+  "short_name": "Los Vagones",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ],
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
