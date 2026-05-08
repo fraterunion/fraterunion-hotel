@@ -9,6 +9,7 @@ export type AvailabilityResult = {
   checkInDate: string;
   checkOutDate: string;
   availableCabins: Array<{
+    id: string;
     name: string;
     slug: string;
     priceFrom: number;
@@ -59,6 +60,7 @@ export class BotAvailabilityService {
     const availableCabins: AvailabilityResult['availableCabins'] = (
       data.results ?? []
     ).map((cabin: any) => ({
+      id: cabin.id as string,
       name: cabin.name as string,
       slug: cabin.slug as string,
       // Use low-occupancy price as the advertised starting price when present

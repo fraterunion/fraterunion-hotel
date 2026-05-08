@@ -15,6 +15,7 @@ const BOOKING_URL = 'https://losvagones.mx/booking';
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 type BotCabin = {
+  id: string;
   name: string;
   slug: string;
   priceFrom: number;
@@ -27,6 +28,12 @@ type BotSession = {
   rawDateText?: string;  // Original user text when ISO extraction not possible
   people?: number;
   availableCabins?: BotCabin[]; // Last shown availability list for cabin selection
+  // Checkout flow fields
+  selectedCabin?: BotCabin;
+  checkoutStep?: 'first_name' | 'last_name' | 'email' | 'confirm';
+  guestFirstName?: string;
+  guestLastName?: string;
+  guestEmail?: string;
   updatedAt: number;
 };
 
@@ -146,6 +153,20 @@ function extractPeople(message: string): number | null {
   return null;
 }
 
+// ── Checkout helpers ──────────────────────────────────────────────────────────
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isYesReply(message: string): boolean {
+  return /^(sí|si|yes|claro|confirmo|correcto|ok|dale|va|listo)$/i.test(message.trim());
+}
+
+function isNoReply(message: string): boolean {
+  return /^(no|nope|corregir|cambiar|cancelar)$/i.test(message.trim());
+}
+
 // ── Cabin booking URL builder ─────────────────────────────────────────────────
 
 function buildCabinBookingUrl(slug: string, session: BotSession): string {
@@ -248,6 +269,60 @@ export class BotAiService {
       return WELCOME_MESSAGE;
     }
 
+    // A0. Checkout data collection — takes priority over all intent detection while active
+    if (session.checkoutStep) {
+      const msg = input.message.trim();
+
+      if (session.checkoutStep === 'first_name') {
+        saveSession(input.from, { guestFirstName: msg, checkoutStep: 'last_name' });
+        return `Perfecto, ${msg}. ¿Cuál es tu apellido?`;
+      }
+
+      if (session.checkoutStep === 'last_name') {
+        saveSession(input.from, { guestLastName: msg, checkoutStep: 'email' });
+        return `Gracias. ¿A qué correo quieres que enviemos la confirmación?`;
+      }
+
+      if (session.checkoutStep === 'email') {
+        if (!isValidEmail(msg)) {
+          return `Ese correo no parece válido. ¿Me lo puedes enviar de nuevo?`;
+        }
+        saveSession(input.from, { guestEmail: msg, checkoutStep: 'confirm' });
+        const updated = getSession(input.from);
+        const cabin = updated.selectedCabin;
+        const dateRange =
+          updated.checkInDate && updated.checkOutDate
+            ? `${updated.checkInDate} al ${updated.checkOutDate}`
+            : updated.rawDateText ?? 'fechas por confirmar';
+        return (
+          `Perfecto 🙌\n\nConfirma que estos datos estén correctos:\n\n` +
+          `- Cabaña: ${cabin?.name ?? '(sin seleccionar)'}\n` +
+          `- Fechas: ${dateRange}\n` +
+          `- Personas: ${updated.people ?? '(sin especificar)'}\n` +
+          `- Nombre: ${updated.guestFirstName} ${updated.guestLastName}\n` +
+          `- Email: ${msg}\n\n` +
+          `Responde "sí" para generarte el link de pago, o "no" para corregir.`
+        );
+      }
+
+      if (session.checkoutStep === 'confirm') {
+        if (isYesReply(msg)) {
+          // Phase 2: create reservation + payment link here
+          return `Perfecto 🔥 En el siguiente paso te generaré el link de pago seguro.`;
+        }
+        if (isNoReply(msg)) {
+          saveSession(input.from, {
+            checkoutStep: 'first_name',
+            guestFirstName: undefined,
+            guestLastName: undefined,
+            guestEmail: undefined,
+          });
+          return `Sin problema 😊 Empecemos de nuevo.\n\n👉 ¿Cuál es tu nombre?`;
+        }
+        return `Por favor responde "sí" para confirmar o "no" para corregir los datos.`;
+      }
+    }
+
     // A1. Cabin selection — user picks a numbered cabin from the last availability list.
     // Only fires when the message is a bare integer (no extra text) to avoid swallowing
     // messages like "2 personas" that should reach the people-intent handler.
@@ -256,7 +331,8 @@ export class BotAiService {
       if (n >= 1 && n <= session.availableCabins.length) {
         const cabin = session.availableCabins[n - 1];
         const bookingUrl = buildCabinBookingUrl(cabin.slug, session);
-        return `🔥 Excelente elección.\n\nEsta cabaña es de las más solicitadas para esas fechas, así que te recomiendo asegurarla lo antes posible para no perderla.\n\n👉 Aquí puedes reservar en menos de 1 minuto:\n${bookingUrl}\n\nSi quieres, puedo ayudarte paso a paso.`;
+        saveSession(input.from, { selectedCabin: cabin, checkoutStep: 'first_name' });
+        return `🔥 Excelente elección: ${cabin.name}\n\nPara generarte el link de pago necesito unos datos rápidos.\n\n👉 ¿Cuál es tu nombre?\n\nTambién puedes reservar aquí:\n${bookingUrl}`;
       }
     }
 
