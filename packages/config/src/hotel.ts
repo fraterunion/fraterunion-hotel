@@ -8,9 +8,9 @@ export const hotelConfig = {
   city: 'La Marquesa',
   region: 'Estado de México',
   country: 'México',
-  heroTitle: 'Hospédate en Los Vagones',
-  heroSubtitle:
-    'Una experiencia única en La Marquesa, a minutos de Santa Fe',
+  heroTitle: 'Un refugio en La Marquesa',
+  heroSubtitle: 'Los Vagones — una experiencia única a minutos de Santa Fe',
+  heroCta: 'Reservar estancia',
   bookingHeadline: 'Planea tu estancia',
   bookingSubheadline:
     'Elige tus fechas y descubre las habitaciones disponibles al instante',
