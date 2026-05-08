@@ -4,8 +4,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreatePublicReservationDto } from './dto/create-public-reservation.dto';
+import { QuoteReservationDto } from './dto/quote-reservation.dto';
 import {
   PaymentRecordStatus,
   PaymentStatus,
@@ -22,11 +24,56 @@ export class ReservationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-    ) {}
+    private readonly configService: ConfigService,
+  ) {}
 
   private generateReservationCode() {
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     return `FUH-${random}`;
+  }
+
+  private computeQuote(
+    roomType: {
+      basePrice: any;
+      lowOccupancyPrice: any;
+      lowOccupancyThreshold: number | null;
+    },
+    settings: {
+      taxPercentage: any;
+      serviceFeeType: string | null;
+      serviceFeeValue: any;
+    } | null | undefined,
+    nights: number,
+    totalOccupants: number,
+  ): {
+    pricePerNight: number;
+    subtotal: number;
+    tax: number;
+    serviceFee: number;
+    total: number;
+  } {
+    const pricePerNight =
+      roomType.lowOccupancyPrice != null &&
+      roomType.lowOccupancyThreshold != null &&
+      totalOccupants <= roomType.lowOccupancyThreshold
+        ? Number(roomType.lowOccupancyPrice)
+        : Number(roomType.basePrice);
+
+    const subtotal = pricePerNight * nights;
+    const taxPercentage = Number(settings?.taxPercentage || 0);
+    const tax = (subtotal * taxPercentage) / 100;
+
+    const feeType = settings?.serviceFeeType || null;
+    const feeValue = Number(settings?.serviceFeeValue || 0);
+    let serviceFee = 0;
+    if (feeType === 'FIXED') {
+      serviceFee = feeValue;
+    } else if (feeType === 'PERCENTAGE') {
+      serviceFee = (subtotal * feeValue) / 100;
+    }
+
+    const total = subtotal + tax + serviceFee;
+    return { pricePerNight, subtotal, tax, serviceFee, total };
   }
 
   async createPublicReservation(dto: CreatePublicReservationDto) {
@@ -146,28 +193,9 @@ export class ReservationsService {
     }
 
     const totalOccupants = dto.adults + (dto.children ?? 0);
-    const nightlyRate =
-      roomType.lowOccupancyPrice != null &&
-      roomType.lowOccupancyThreshold != null &&
-      totalOccupants <= roomType.lowOccupancyThreshold
-        ? Number(roomType.lowOccupancyPrice)
-        : Number(roomType.basePrice);
-    const baseAmount = nightlyRate * nights;
-    const taxPercentage = Number(hotel.settings?.taxPercentage || 0);
-    const taxAmount = (baseAmount * taxPercentage) / 100;
-
-    let feesAmount = 0;
-    const feeType = hotel.settings?.serviceFeeType || null;
-    const feeValue = Number(hotel.settings?.serviceFeeValue || 0);
-
-    if (feeType === 'FIXED') {
-      feesAmount = feeValue;
-    } else if (feeType === 'PERCENTAGE') {
-      feesAmount = (baseAmount * feeValue) / 100;
-    }
-
+    const { pricePerNight: _pricePn, subtotal: baseAmount, tax: taxAmount, serviceFee: feesAmount, total: totalAmount } =
+      this.computeQuote(roomType, hotel.settings, nights, totalOccupants);
     const discountAmount = 0;
-    const totalAmount = baseAmount + taxAmount + feesAmount - discountAmount;
 
     const existingGuest = await this.prisma.guest.findFirst({
       where: {
@@ -257,6 +285,126 @@ export class ReservationsService {
     return {
       message: 'Reservation created successfully',
       reservation,
+    };
+  }
+
+  async quoteReservation(dto: QuoteReservationDto) {
+    const checkIn = new Date(dto.checkInDate);
+    const checkOut = new Date(dto.checkOutDate);
+
+    if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) {
+      throw new BadRequestException('Invalid dates');
+    }
+
+    if (checkOut <= checkIn) {
+      throw new BadRequestException('checkOutDate must be after checkInDate');
+    }
+
+    const nights = Math.ceil(
+      (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    if (nights < 1) {
+      throw new BadRequestException('Stay must be at least 1 night');
+    }
+
+    const hotel = await this.prisma.hotel.findUnique({
+      where: { slug: dto.hotelSlug },
+      select: {
+        id: true,
+        tenantId: true,
+        currency: true,
+        settings: {
+          select: {
+            taxPercentage: true,
+            serviceFeeType: true,
+            serviceFeeValue: true,
+          },
+        },
+      },
+    });
+
+    if (!hotel) {
+      throw new NotFoundException('Hotel not found');
+    }
+
+    const roomType = await this.prisma.roomType.findFirst({
+      where: {
+        id: dto.roomTypeId,
+        hotelId: hotel.id,
+        hotel: { tenantId: hotel.tenantId },
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        name: true,
+        basePrice: true,
+        lowOccupancyPrice: true,
+        lowOccupancyThreshold: true,
+        capacityAdults: true,
+        capacityChildren: true,
+      },
+    });
+
+    if (!roomType) {
+      throw new NotFoundException('Room type not found');
+    }
+
+    if (dto.adults > roomType.capacityAdults) {
+      throw new BadRequestException('Adults exceed room capacity');
+    }
+
+    const children = dto.children ?? 0;
+    if (children > roomType.capacityChildren) {
+      throw new BadRequestException('Children exceed room capacity');
+    }
+
+    const totalRooms = await this.prisma.room.count({
+      where: {
+        hotelId: hotel.id,
+        roomTypeId: roomType.id,
+        hotel: { tenantId: hotel.tenantId },
+        status: { not: RoomStatus.OUT_OF_SERVICE },
+      },
+    });
+
+    const overlappingReservations = await this.prisma.reservation.count({
+      where: {
+        hotelId: hotel.id,
+        roomTypeId: roomType.id,
+        hotel: { tenantId: hotel.tenantId },
+        status: { in: [ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN] },
+        checkInDate: { lt: checkOut },
+        checkOutDate: { gt: checkIn },
+      },
+    });
+
+    const availableCount = Math.max(totalRooms - overlappingReservations, 0);
+
+    if (availableCount <= 0) {
+      throw new BadRequestException('No availability for selected room type');
+    }
+
+    const totalOccupants = dto.adults + children;
+    const { pricePerNight, subtotal, tax, serviceFee, total } =
+      this.computeQuote(roomType, hotel.settings, nights, totalOccupants);
+
+    return {
+      roomTypeId: roomType.id,
+      roomTypeName: roomType.name,
+      checkInDate: dto.checkInDate,
+      checkOutDate: dto.checkOutDate,
+      nights,
+      pricePerNight: Math.round(pricePerNight * 100) / 100,
+      subtotal: Math.round(subtotal * 100) / 100,
+      tax: Math.round(tax * 100) / 100,
+      serviceFee: Math.round(serviceFee * 100) / 100,
+      total: Math.round(total * 100) / 100,
+      currency: (
+        this.configService.get<string>('STRIPE_CURRENCY') ||
+        hotel.currency ||
+        'mxn'
+      ).toUpperCase(),
     };
   }
 

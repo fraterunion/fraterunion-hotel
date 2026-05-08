@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ReservationsService } from './reservations.service';
 import { CreatePublicReservationDto } from './dto/create-public-reservation.dto';
+import { QuoteReservationDto } from './dto/quote-reservation.dto';
 import { JwtAuthGuard } from '../../core/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { CurrentUserType } from '../../../common/types/current-user.type';
@@ -18,6 +19,11 @@ import { AssignRoomDto } from './dto/assign-room.dto';
 @Controller()
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
+
+  @Post('public/reservations/quote')
+  async quoteReservation(@Body() dto: QuoteReservationDto) {
+    return this.reservationsService.quoteReservation(dto);
+  }
 
   @Post('public/reservations')
   async createPublicReservation(@Body() dto: CreatePublicReservationDto) {
