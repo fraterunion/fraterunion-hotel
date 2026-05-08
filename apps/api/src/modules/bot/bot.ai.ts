@@ -209,6 +209,20 @@ function buildCabinBookingUrl(slug: string, session: BotSession): string {
   return `${base}?${params.toString()}`;
 }
 
+// ── Description shortener (max 2 sentences / 220 chars) ──────────────────────
+
+function shortenDescription(desc: string): string {
+  if (desc.length <= 180) return desc;
+  const firstEnd = desc.search(/[.!?]\s/);
+  if (firstEnd === -1 || firstEnd > 180) return desc.slice(0, 177) + '...';
+  const first = desc.slice(0, firstEnd + 1);
+  const rest = desc.slice(firstEnd + 2).trim();
+  const secondEnd = rest.search(/[.!?]\s/);
+  const second = secondEnd !== -1 ? rest.slice(0, secondEnd + 1) : rest;
+  const combined = `${first} ${second}`;
+  return combined.length <= 220 ? combined : first;
+}
+
 // ── Cabin list formatter (shared by direct search and OpenAI tool path) ───────
 
 function formatCabinList(cabins: BotCabin[]): string {
@@ -505,12 +519,17 @@ export class BotAiService {
 
     // ── 3. Cabin info intent (requires active cabin list) ───────────────────────
     if (session.availableCabins?.length) {
+      // "ver opciones" — re-render the cabin list without touching session
+      if (/^ver\s+opciones?$/i.test(input.message.trim())) {
+        return formatCabinList(session.availableCabins);
+      }
+
       const infoN = getCabinInfoNumber(input.message);
       if (infoN !== null && infoN >= 1 && infoN <= session.availableCabins.length) {
         const cabin = session.availableCabins[infoN - 1];
         const catalog = await this.fetchCatalogCache(input.from);
         const detail = catalog.find((c) => c.slug === cabin.slug);
-        return this.formatCabinInfoResponse(cabin, detail, infoN);
+        return this.formatCabinInfoResponse(cabin, detail, infoN, session.availableCabins.length);
       }
 
       // ── 4. Cabin selection (bare integer) ─────────────────────────────────────
@@ -581,24 +600,39 @@ export class BotAiService {
     cabin: BotCabin,
     detail: BotCatalogItem | undefined,
     n: number,
+    totalCabins: number,
   ): string {
-    const description =
+    const rawDescription =
       detail?.description ?? 'Una cabaña diseñada para una experiencia única en La Marquesa.';
-    const specs: string[] = [];
-    if (cabin.capacityAdults) specs.push(`Capacidad: hasta ${cabin.capacityAdults} personas`);
-    if (detail?.sizeM2) specs.push(`Espacio: ${detail.sizeM2} m²`);
-    if (detail?.bedType) specs.push(`Cama: ${detail.bedType}`);
-    specs.push(`Precio: $${Math.round(cabin.priceFrom).toLocaleString('es-MX')} MXN/noche`);
-    const specsBlock = specs.map((s) => `- ${s}`).join('\n');
-    const amenitiesLine =
-      detail?.amenities?.length ? `\nServicios: ${detail.amenities.join(' · ')}` : '';
+    const description = shortenDescription(rawDescription);
+
+    // Specs line (only defined fields)
+    const specParts: string[] = [];
+    if (cabin.capacityAdults) specParts.push(`👥 Hasta ${cabin.capacityAdults} personas`);
+    if (detail?.bedType) specParts.push(`🛏️ ${detail.bedType}`);
+    if (detail?.sizeM2) specParts.push(`📐 ${detail.sizeM2} m²`);
+    specParts.push(`💰 Desde $${Math.round(cabin.priceFrom).toLocaleString('es-MX')} MXN/noche`);
+    const specsBlock = specParts.join('\n');
+
+    // Up to 5 amenity highlights
+    const highlights = (detail?.amenities ?? []).slice(0, 5);
+    const highlightsBlock = highlights.length
+      ? `\n✨ Destacados:\n${highlights.map((a) => `• ${a}`).join('\n')}`
+      : '';
+
+    // Navigation footer
+    const altN = n === 1 ? 2 : 1;
+    const altHint = totalCabins > 1 ? `\n• "info ${altN}" para conocer otra cabaña` : '';
+    const footer =
+      `👉 Responde con el número ${n} para reservar esta cabaña.\n\n` +
+      `o escribe:\n• "ver opciones" para ver la lista completa${altHint}`;
 
     return (
       `🏕️ ${cabin.name}\n\n` +
       `${description}\n\n` +
       `${specsBlock}` +
-      `${amenitiesLine}\n\n` +
-      `Si te convence esta opción, responde con el número ${n} para continuar con tu reserva.`
+      `${highlightsBlock}\n\n` +
+      `${footer}`
     );
   }
 
