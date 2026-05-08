@@ -48,4 +48,14 @@ export class UpdateRoomTypeDto {
   @IsOptional()
   @IsEnum(RoomTypeStatus)
   status?: RoomTypeStatus;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lowOccupancyPrice?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  lowOccupancyThreshold?: number;
 }
