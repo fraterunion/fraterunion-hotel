@@ -31,7 +31,7 @@ type BotSession = {
   availableCabins?: BotCabin[]; // Last shown availability list for cabin selection
   // Checkout flow fields
   selectedCabin?: BotCabin;
-  checkoutStep?: 'first_name' | 'last_name' | 'email' | 'confirm';
+  checkoutStep?: 'full_name' | 'people' | 'email' | 'confirm';
   guestFirstName?: string;
   guestLastName?: string;
   guestEmail?: string;
@@ -285,14 +285,21 @@ export class BotAiService {
     if (session.checkoutStep) {
       const msg = input.message.trim();
 
-      if (session.checkoutStep === 'first_name') {
-        saveSession(input.from, { guestFirstName: msg, checkoutStep: 'last_name' });
-        return `Perfecto, ${msg}. ¿Cuál es tu apellido?`;
+      if (session.checkoutStep === 'full_name') {
+        const parts = msg.split(/\s+/);
+        const firstName = parts[0];
+        const lastName = parts.slice(1).join(' ') || 'N/A';
+        saveSession(input.from, { guestFirstName: firstName, guestLastName: lastName, checkoutStep: 'people' });
+        return `Perfecto, ${firstName} 👋\n\n👉 ¿Para cuántas personas sería la estancia?`;
       }
 
-      if (session.checkoutStep === 'last_name') {
-        saveSession(input.from, { guestLastName: msg, checkoutStep: 'email' });
-        return `Gracias. ¿A qué correo quieres que enviemos la confirmación?`;
+      if (session.checkoutStep === 'people') {
+        const n = parseInt(msg, 10);
+        if (!Number.isInteger(n) || n < 1) {
+          return `Por favor indica el número de personas (por ejemplo: 2).`;
+        }
+        saveSession(input.from, { people: n, checkoutStep: 'email' });
+        return `Anotado, ${n} persona${n === 1 ? '' : 's'} 🙌\n\n👉 ¿A qué correo quieres que enviemos la confirmación?`;
       }
 
       if (session.checkoutStep === 'email') {
@@ -310,7 +317,7 @@ export class BotAiService {
           `Perfecto 🙌\n\nConfirma que estos datos estén correctos:\n\n` +
           `- Cabaña: ${cabin?.name ?? '(sin seleccionar)'}\n` +
           `- Fechas: ${dateRange}\n` +
-          `- Personas: ${updated.people ?? '(sin especificar)'}\n` +
+          `- Personas: ${updated.people}\n` +
           `- Nombre: ${updated.guestFirstName} ${updated.guestLastName}\n` +
           `- Email: ${msg}\n\n` +
           `Responde "sí" para generarte el link de pago, o "no" para corregir.`
@@ -326,9 +333,7 @@ export class BotAiService {
             return `🔥 Ya tienes un link activo para tu reserva:\n\n${session.checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona escríbeme y te genero uno nuevo.`;
           }
 
-          const { selectedCabin, checkInDate, checkOutDate, guestFirstName, guestLastName, guestEmail } = session;
-          // Default people to 2 if not captured (e.g. user skipped people step)
-          const people = session.people ?? 2;
+          const { selectedCabin, checkInDate, checkOutDate, people, guestFirstName, guestLastName, guestEmail } = session;
 
           console.log('[BOT CHECKOUT] session snapshot:', {
             from: input.from,
@@ -344,7 +349,7 @@ export class BotAiService {
           });
 
           // Validation — fall back to web booking link if any required value is missing
-          if (!selectedCabin?.id || !checkInDate || !checkOutDate || !guestFirstName || !guestLastName || !guestEmail) {
+          if (!selectedCabin?.id || !checkInDate || !checkOutDate || !people || !guestFirstName || !guestLastName || !guestEmail) {
             this.logger.warn(`[BOT CHECKOUT] failed: missing session fields — cabin=${selectedCabin?.id} ci=${checkInDate} co=${checkOutDate} people=${people} name=${guestFirstName} ${guestLastName} email=${guestEmail}`);
             const fallbackUrl = selectedCabin ? buildCabinBookingUrl(selectedCabin.slug, session) : BOOKING_URL;
             saveSession(input.from, { checkoutStep: undefined });
@@ -398,12 +403,13 @@ export class BotAiService {
         }
         if (isNoReply(msg)) {
           saveSession(input.from, {
-            checkoutStep: 'first_name',
+            checkoutStep: 'full_name',
             guestFirstName: undefined,
             guestLastName: undefined,
             guestEmail: undefined,
+            people: undefined,
           });
-          return `Sin problema 😊 Empecemos de nuevo.\n\n👉 ¿Cuál es tu nombre?`;
+          return `Sin problema 😊 Empecemos de nuevo.\n\n👉 ¿Cuál es tu nombre completo?`;
         }
         return `Por favor responde "sí" para confirmar o "no" para corregir los datos.`;
       }
@@ -417,8 +423,8 @@ export class BotAiService {
       if (n >= 1 && n <= session.availableCabins.length) {
         const cabin = session.availableCabins[n - 1];
         const bookingUrl = buildCabinBookingUrl(cabin.slug, session);
-        saveSession(input.from, { selectedCabin: cabin, checkoutStep: 'first_name' });
-        return `🔥 Excelente elección: ${cabin.name}\n\nPara generarte el link de pago necesito unos datos rápidos.\n\n👉 ¿Cuál es tu nombre?\n\nTambién puedes reservar aquí:\n${bookingUrl}`;
+        saveSession(input.from, { selectedCabin: cabin, checkoutStep: 'full_name' });
+        return `🔥 Excelente elección: ${cabin.name}\n\nPara generarte el link de pago necesito unos datos rápidos.\n\n👉 ¿Cuál es tu nombre completo?\n\nTambién puedes reservar aquí:\n${bookingUrl}`;
       }
     }
 
