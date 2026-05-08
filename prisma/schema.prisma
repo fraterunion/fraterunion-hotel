@@ -91,6 +91,12 @@ enum TenantStatus {
   INACTIVE
 }
 
+enum FollowUpStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 model Tenant {
   id          String        @id @default(cuid())
   name        String
@@ -131,6 +137,7 @@ model Hotel {
   payments      Payment[]
   auditLogs     AuditLog[]
   roomBlocks    RoomBlock[]
+  botFollowUps  BotCheckoutFollowUp[]
 
   @@index([tenantId])
   @@index([slug])
@@ -321,6 +328,7 @@ model Reservation {
   roomType         RoomType            @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
   assignedRoom     Room?               @relation("AssignedRoomReservations", fields: [assignedRoomId], references: [id], onDelete: SetNull)
   payments         Payment[]
+  botFollowUps     BotCheckoutFollowUp[]
 
   @@index([hotelId])
   @@index([guestId])
@@ -394,4 +402,27 @@ model RoomBlock {
   @@index([roomTypeId])
   @@index([startDate, endDate])
   @@map("room_blocks")
+}
+
+model BotCheckoutFollowUp {
+  id             String         @id @default(cuid())
+  hotelId        String
+  reservationId  String
+  whatsappFrom   String
+  guestFirstName String
+  checkoutUrl    String
+  sentCount      Int            @default(0)
+  maxAttempts    Int            @default(2)
+  lastSentAt     DateTime?
+  nextSendAt     DateTime
+  status         FollowUpStatus @default(PENDING)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  hotel          Hotel          @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  reservation    Reservation    @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextSendAt])
+  @@index([reservationId])
+  @@map("bot_checkout_follow_ups")
 }

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { BotAvailabilityService } from './bot.availability';
+import { BotFollowUpService } from './bot.follow-up.service';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -310,6 +311,7 @@ export class BotAiService {
   constructor(
     private readonly configService: ConfigService,
     private readonly botAvailabilityService: BotAvailabilityService,
+    private readonly botFollowUpService: BotFollowUpService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
@@ -497,6 +499,18 @@ export class BotAiService {
             saveSession(input.from, { checkoutStep: undefined });
             return `Reserva creada, pero no pude generar el link de pago 😔\n\nCompleta el pago aquí:\n${fallbackUrl}`;
           }
+
+          // Schedule follow-up — fire-and-forget, never blocks the checkout response
+          this.botFollowUpService
+            .scheduleFollowUp({
+              reservationId,
+              whatsappFrom: input.from,
+              guestFirstName: guestFirstName ?? '',
+              checkoutUrl,
+            })
+            .catch((err: any) =>
+              this.logger.error(`[BOT FOLLOW-UP] schedule failed: ${err?.message}`),
+            );
 
           return `🔥 Ya quedó todo listo.\n\n👉 Aquí puedes pagar y asegurar tu cabaña:\n${checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona escríbeme y te genero uno nuevo.`;
         }
