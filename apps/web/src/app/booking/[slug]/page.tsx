@@ -40,6 +40,20 @@ type ReservationResult = {
   hotel: { name: string; currency: string };
 };
 
+type QuoteResult = {
+  roomTypeId: string;
+  roomTypeName: string;
+  checkInDate: string;
+  checkOutDate: string;
+  nights: number;
+  pricePerNight: number;
+  subtotal: number;
+  tax: number;
+  serviceFee: number;
+  total: number;
+  currency: string;
+};
+
 type Step = 'dates' | 'reserve' | 'success';
 
 const API_BASE_URL =
@@ -86,10 +100,10 @@ async function probeImages(paths: string[]): Promise<string[]> {
   return results.filter((r): r is string => r !== null);
 }
 
-function formatCurrency(value: string | number) {
+function formatCurrency(value: string | number, currency = 'MXN') {
   return new Intl.NumberFormat('es-MX', {
     style: 'currency',
-    currency: 'MXN',
+    currency: currency || 'MXN',
     maximumFractionDigits: 0,
   }).format(Number(value || 0));
 }
@@ -159,6 +173,11 @@ export default function CabinDetailPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
 
+  // Quote
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const [quoteFetching, setQuoteFetching] = useState(false);
+  const [quoteError, setQuoteError] = useState(false);
+
   // Prefill from query params when arriving from a WhatsApp bot link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -187,6 +206,35 @@ export default function CabinDetailPage() {
       if (Number.isInteger(n) && n >= 0) setChildren(n);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (step !== 'reserve' || !cabin || !checkIn || !checkOut) return;
+    const controller = new AbortController();
+    setQuote(null);
+    setQuoteError(false);
+    setQuoteFetching(true);
+    fetch(`${API_BASE_URL}/public/reservations/quote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hotelSlug: hotelConfig.defaultHotelSlug,
+        roomTypeId: cabin.id,
+        checkInDate: checkIn,
+        checkOutDate: checkOut,
+        adults,
+        children,
+      }),
+      signal: controller.signal,
+    })
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: QuoteResult) => { setQuote(data); setQuoteFetching(false); })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        setQuoteError(true);
+        setQuoteFetching(false);
+      });
+    return () => controller.abort();
+  }, [step, adults, children, cabin?.id, checkIn, checkOut]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function load() {
@@ -666,8 +714,7 @@ export default function CabinDetailPage() {
                           {formatDateEs(checkIn)} → {formatDateEs(checkOut)}
                         </p>
                         <p className="mt-0.5 text-xs text-[var(--cabin-ink-faint)]">
-                          {nights === 1 ? '1 noche' : `${nights} noches`} ·{' '}
-                          {formatCurrency(estimatedTotal)} estimado
+                          {nights === 1 ? '1 noche' : `${nights} noches`}
                         </p>
                       </div>
                       <button
@@ -802,6 +849,85 @@ export default function CabinDetailPage() {
                     />
                   </div>
 
+                  {/* ── Payment summary ── */}
+                  <div className="rounded-xl bg-[var(--cabin-bg)] px-4 py-4">
+                    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--cabin-ink-faint)]">
+                      Resumen de pago
+                    </p>
+
+                    {quoteFetching && (
+                      <div className="animate-pulse space-y-2.5">
+                        <div className="flex justify-between">
+                          <div className="h-3 w-2/5 rounded bg-[var(--cabin-border)] opacity-60" />
+                          <div className="h-3 w-1/5 rounded bg-[var(--cabin-border)] opacity-60" />
+                        </div>
+                        <div className="flex justify-between">
+                          <div className="h-3 w-1/4 rounded bg-[var(--cabin-border)] opacity-60" />
+                          <div className="h-3 w-1/6 rounded bg-[var(--cabin-border)] opacity-60" />
+                        </div>
+                        <div className="mt-1 h-px bg-[var(--cabin-border-soft)]" />
+                        <div className="flex justify-between">
+                          <div className="h-4 w-1/6 rounded bg-[var(--cabin-border)] opacity-60" />
+                          <div className="h-4 w-1/4 rounded bg-[var(--cabin-border)] opacity-70" />
+                        </div>
+                      </div>
+                    )}
+
+                    {!quoteFetching && quote && (
+                      <>
+                        <div className="space-y-2">
+                          <div className="flex items-baseline justify-between text-sm">
+                            <span className="text-[var(--cabin-ink-soft)]">
+                              {quote.nights}{' '}
+                              {quote.nights === 1 ? 'noche' : 'noches'} ×{' '}
+                              {formatCurrency(quote.pricePerNight, quote.currency)}
+                            </span>
+                            <span className="tabular-nums text-[var(--cabin-ink)]">
+                              {formatCurrency(quote.subtotal, quote.currency)}
+                            </span>
+                          </div>
+                          {quote.tax > 0 && (
+                            <div className="flex items-baseline justify-between text-sm">
+                              <span className="text-[var(--cabin-ink-soft)]">IVA</span>
+                              <span className="tabular-nums text-[var(--cabin-ink)]">
+                                {formatCurrency(quote.tax, quote.currency)}
+                              </span>
+                            </div>
+                          )}
+                          {quote.serviceFee > 0 && (
+                            <div className="flex items-baseline justify-between text-sm">
+                              <span className="text-[var(--cabin-ink-soft)]">
+                                Cargo por servicio
+                              </span>
+                              <span className="tabular-nums text-[var(--cabin-ink)]">
+                                {formatCurrency(quote.serviceFee, quote.currency)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-baseline justify-between border-t border-[var(--cabin-border-soft)] pt-3">
+                          <span className="text-sm font-semibold text-[var(--cabin-ink)]">
+                            Total
+                          </span>
+                          <span className="tabular-nums">
+                            <span className="text-base font-semibold text-[var(--cabin-forest-deep)]">
+                              {formatCurrency(quote.total, quote.currency)}
+                            </span>{' '}
+                            <span className="text-xs font-normal text-[var(--cabin-ink-faint)]">
+                              {quote.currency}
+                            </span>
+                          </span>
+                        </div>
+                      </>
+                    )}
+
+                    {!quoteFetching && quoteError && (
+                      <p className="text-xs text-[var(--cabin-ink-faint)]">
+                        El precio exacto se confirmará al completar la reserva.
+                      </p>
+                    )}
+                  </div>
+
                   {reserveError && (
                     <p className="text-sm font-medium text-red-700">
                       {reserveError}
@@ -817,10 +943,6 @@ export default function CabinDetailPage() {
                       ? bookingCopy.guest.creating
                       : bookingCopy.guest.completeCta}
                   </button>
-
-                  <p className="text-center text-[11px] text-[var(--cabin-ink-faint)]">
-                    {bookingCopy.detail.noTaxNote}
-                  </p>
                 </form>
               )}
             </div>
