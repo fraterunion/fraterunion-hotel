@@ -264,9 +264,13 @@ export class BotAiService {
       this.client = new OpenAI({ apiKey });
     }
     const port = this.configService.get<string>('PORT') ?? '4000';
-    this.baseUrl =
-      this.configService.get<string>('INTERNAL_API_URL') ?? `http://localhost:${port}`;
-    this.logger.log('[BOT VERSION] phase2-checkout-enabled');
+    const internalApiUrl = this.configService.get<string>('INTERNAL_API_URL');
+    this.baseUrl = internalApiUrl ?? `http://127.0.0.1:${port}`;
+    this.logger.log(`[BOT VERSION] phase2-checkout-enabled — baseUrl: ${this.baseUrl}`);
+
+    if (!this.configService.get<string>('STRIPE_SECRET_KEY')) {
+      this.logger.error('[BOT VERSION] STRIPE_SECRET_KEY is not set — checkout sessions will fail');
+    }
   }
 
   async generateResponse(input: { from: string; message: string }): Promise<string> {
@@ -322,47 +326,68 @@ export class BotAiService {
             return `🔥 Ya tienes un link activo para tu reserva:\n\n${session.checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona escríbeme y te genero uno nuevo.`;
           }
 
-          const { selectedCabin, checkInDate, checkOutDate, people, guestFirstName, guestLastName, guestEmail } = session;
+          const { selectedCabin, checkInDate, checkOutDate, guestFirstName, guestLastName, guestEmail } = session;
+          // Default people to 2 if not captured (e.g. user skipped people step)
+          const people = session.people ?? 2;
+
+          console.log('[BOT CHECKOUT] session snapshot:', {
+            from: input.from,
+            selectedCabinId: selectedCabin?.id,
+            selectedCabinName: selectedCabin?.name,
+            checkInDate,
+            checkOutDate,
+            people,
+            guestFirstName,
+            guestLastName,
+            guestEmail,
+            baseUrl: this.baseUrl,
+          });
 
           // Validation — fall back to web booking link if any required value is missing
-          if (!selectedCabin?.id || !checkInDate || !checkOutDate || !people || !guestFirstName || !guestLastName || !guestEmail) {
+          if (!selectedCabin?.id || !checkInDate || !checkOutDate || !guestFirstName || !guestLastName || !guestEmail) {
             this.logger.warn(`[BOT CHECKOUT] failed: missing session fields — cabin=${selectedCabin?.id} ci=${checkInDate} co=${checkOutDate} people=${people} name=${guestFirstName} ${guestLastName} email=${guestEmail}`);
             const fallbackUrl = selectedCabin ? buildCabinBookingUrl(selectedCabin.slug, session) : BOOKING_URL;
             saveSession(input.from, { checkoutStep: undefined });
             return `Tuve un problema generando tu link de pago 😔\n\nPuedes reservar directamente aquí:\n${fallbackUrl}`;
           }
 
-          this.logger.log(`[BOT CHECKOUT] creating reservation for ${input.from} — cabin: ${selectedCabin.id}, dates: ${checkInDate}→${checkOutDate}, guests: ${people}`);
+          const reservationPayload = {
+            roomTypeId: selectedCabin.id,
+            checkInDate,
+            checkOutDate,
+            adults: people,
+            children: 0,
+            firstName: guestFirstName,
+            lastName: guestLastName,
+            email: guestEmail,
+          };
+
+          console.log('[BOT CHECKOUT] payload:', reservationPayload);
 
           let reservationId: string;
           try {
-            reservationId = await this.createPublicReservation({
-              roomTypeId: selectedCabin.id,
-              checkInDate,
-              checkOutDate,
-              adults: people,
-              children: 0,
-              firstName: guestFirstName,
-              lastName: guestLastName,
-              email: guestEmail,
-            });
+            reservationId = await this.createPublicReservation(reservationPayload);
             saveSession(input.from, { reservationId });
+            console.log('[BOT CHECKOUT] reservation response:', { id: reservationId });
             this.logger.log(`[BOT CHECKOUT] reservation created: ${reservationId}`);
           } catch (err: any) {
+            console.error('[BOT CHECKOUT] ERROR (reservation):', err);
             this.logger.error(`[BOT CHECKOUT] failed: reservation creation — ${err?.message}`);
             const fallbackUrl = buildCabinBookingUrl(selectedCabin.slug, session);
             saveSession(input.from, { checkoutStep: undefined });
             return `Tuve un problema creando tu reserva 😔\n\nPuedes intentarlo directamente aquí:\n${fallbackUrl}`;
           }
 
-          this.logger.log(`[BOT CHECKOUT] creating checkout session for reservation: ${reservationId}`);
+          console.log('[BOT CHECKOUT] creating checkout session for:', reservationId);
 
           let checkoutUrl: string;
           try {
             checkoutUrl = await this.createCheckoutSession(reservationId);
             saveSession(input.from, { checkoutUrl, checkoutStep: undefined });
+            console.log('[BOT CHECKOUT] checkout response:', { checkoutUrl });
             this.logger.log(`[BOT CHECKOUT] checkout session created: ${checkoutUrl}`);
           } catch (err: any) {
+            console.error('[BOT CHECKOUT] ERROR (checkout session):', err);
             this.logger.error(`[BOT CHECKOUT] failed: checkout session creation — ${err?.message}`);
             const fallbackUrl = buildCabinBookingUrl(selectedCabin.slug, session);
             saveSession(input.from, { checkoutStep: undefined });
