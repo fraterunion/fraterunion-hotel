@@ -9,6 +9,7 @@ const FALLBACK_RESPONSE =
   'Gracias por escribir a Los Vagones. En este momento estamos configurando nuestro asistente automático. Para reservar, visita https://losvagones.mx';
 
 const BOOKING_URL = 'https://losvagones.mx/booking';
+const BOT_HOTEL_SLUG = 'hotel-boutique-demo';
 
 // ── Session memory ───────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ type BotSession = {
   guestFirstName?: string;
   guestLastName?: string;
   guestEmail?: string;
+  reservationId?: string;
+  checkoutUrl?: string;
   updatedAt: number;
 };
 
@@ -247,6 +250,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 export class BotAiService {
   private readonly logger = new Logger(BotAiService.name);
   private readonly client: OpenAI | null;
+  private readonly baseUrl: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -259,6 +263,9 @@ export class BotAiService {
     } else {
       this.client = new OpenAI({ apiKey });
     }
+    const port = this.configService.get<string>('PORT') ?? '4000';
+    this.baseUrl =
+      this.configService.get<string>('INTERNAL_API_URL') ?? `http://localhost:${port}`;
   }
 
   async generateResponse(input: { from: string; message: string }): Promise<string> {
@@ -307,8 +314,52 @@ export class BotAiService {
 
       if (session.checkoutStep === 'confirm') {
         if (isYesReply(msg)) {
-          // Phase 2: create reservation + payment link here
-          return `Perfecto 🔥 En el siguiente paso te generaré el link de pago seguro.`;
+          // Idempotency guard — reuse existing checkout link if already created
+          if (session.reservationId && session.checkoutUrl) {
+            return `🔥 Ya tienes un link activo para tu reserva:\n\n${session.checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona escríbeme y te genero uno nuevo.`;
+          }
+
+          const { selectedCabin, checkInDate, checkOutDate, people, guestFirstName, guestLastName, guestEmail } = session;
+
+          // Validation — fall back to web booking link if any required value is missing
+          if (!selectedCabin?.id || !checkInDate || !checkOutDate || !people || !guestFirstName || !guestLastName || !guestEmail) {
+            const fallbackUrl = selectedCabin ? buildCabinBookingUrl(selectedCabin.slug, session) : BOOKING_URL;
+            saveSession(input.from, { checkoutStep: undefined });
+            return `Tuve un problema generando tu link de pago 😔\n\nPuedes reservar directamente aquí:\n${fallbackUrl}`;
+          }
+
+          let reservationId: string;
+          try {
+            reservationId = await this.createPublicReservation({
+              roomTypeId: selectedCabin.id,
+              checkInDate,
+              checkOutDate,
+              adults: people,
+              children: 0,
+              firstName: guestFirstName,
+              lastName: guestLastName,
+              email: guestEmail,
+            });
+            saveSession(input.from, { reservationId });
+          } catch (err: any) {
+            this.logger.error(`Reservation creation failed: ${err?.message}`);
+            const fallbackUrl = buildCabinBookingUrl(selectedCabin.slug, session);
+            saveSession(input.from, { checkoutStep: undefined });
+            return `Tuve un problema creando tu reserva 😔\n\nPuedes intentarlo directamente aquí:\n${fallbackUrl}`;
+          }
+
+          let checkoutUrl: string;
+          try {
+            checkoutUrl = await this.createCheckoutSession(reservationId);
+            saveSession(input.from, { checkoutUrl, checkoutStep: undefined });
+          } catch (err: any) {
+            this.logger.error(`Checkout session creation failed: ${err?.message}`);
+            const fallbackUrl = buildCabinBookingUrl(selectedCabin.slug, session);
+            saveSession(input.from, { checkoutStep: undefined });
+            return `Reserva creada, pero no pude generar el link de pago 😔\n\nCompleta el pago aquí:\n${fallbackUrl}`;
+          }
+
+          return `🔥 Ya quedó todo listo.\n\n👉 Aquí puedes pagar y asegurar tu cabaña:\n${checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona escríbeme y te genero uno nuevo.`;
         }
         if (isNoReply(msg)) {
           saveSession(input.from, {
@@ -409,6 +460,49 @@ export class BotAiService {
 
     // E. Free-form / unrecognised — let OpenAI handle it
     return this.callOpenAi(input, '');
+  }
+
+  private async createPublicReservation(payload: {
+    roomTypeId: string;
+    checkInDate: string;
+    checkOutDate: string;
+    adults: number;
+    children: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  }): Promise<string> {
+    const url = `${this.baseUrl}/api/public/reservations`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hotelSlug: BOT_HOTEL_SLUG, ...payload }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Reservations API returned HTTP ${res.status}: ${text}`);
+    }
+    const data = await res.json();
+    const id = data?.reservation?.id as string | undefined;
+    if (!id) throw new Error('Reservations API response missing reservation.id');
+    return id;
+  }
+
+  private async createCheckoutSession(reservationId: string): Promise<string> {
+    const url = `${this.baseUrl}/api/public/payments/checkout-session`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reservationId }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Payments API returned HTTP ${res.status}: ${text}`);
+    }
+    const data = await res.json();
+    const checkoutUrl = data?.checkoutUrl as string | undefined;
+    if (!checkoutUrl) throw new Error('Payments API response missing checkoutUrl');
+    return checkoutUrl;
   }
 
   private async callOpenAi(
