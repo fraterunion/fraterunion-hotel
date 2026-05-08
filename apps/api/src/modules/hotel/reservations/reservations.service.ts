@@ -71,6 +71,8 @@ export class ReservationsService {
     } else if (feeType === 'PERCENTAGE') {
       serviceFee = (subtotal * feeValue) / 100;
     }
+    // Service fee disabled — nightly rates include operational costs. Set to 0 to re-enable.
+    serviceFee = 0;
 
     const total = subtotal + tax + serviceFee;
     return { pricePerNight, subtotal, tax, serviceFee, total };
