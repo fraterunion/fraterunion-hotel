@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import AdminShell from '../../../components/admin/AdminShell';
 import { apiFetch } from '../../../lib/api';
 
-type CabinImage = { url: string; altText: string | null };
+type CabinImage = { id: string; url: string; altText: string | null; sortOrder: number };
 
 type Cabin = {
   id: string;
@@ -69,6 +69,15 @@ export default function CabinEditPage() {
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Image management
+  const [images, setImages] = useState<CabinImage[]>([]);
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [newImageAlt, setNewImageAlt] = useState('');
+  const [addingImage, setAddingImage] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const [imageError, setImageError] = useState('');
+
   // Form fields
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -83,10 +92,8 @@ export default function CabinEditPage() {
     const token = localStorage.getItem('fu_admin_token');
     if (!token) { router.push('/login'); return; }
 
-    apiFetch<Cabin[]>('/admin/room-types')
-      .then((cabins) => {
-        const found = cabins.find((c) => c.id === id);
-        if (!found) { router.push('/cabins'); return; }
+    apiFetch<Cabin>(`/admin/room-types/${id}`)
+      .then((found) => {
         setCabin(found);
         setName(found.name);
         setDescription(found.description ?? '');
@@ -98,6 +105,7 @@ export default function CabinEditPage() {
           found.lowOccupancyThreshold != null ? String(found.lowOccupancyThreshold) : '',
         );
         setStatus(found.status);
+        setImages([...(found.images ?? [])].sort((a, b) => a.sortOrder - b.sortOrder));
       })
       .catch(() => router.push('/cabins'))
       .finally(() => setLoading(false));
@@ -132,6 +140,64 @@ export default function CabinEditPage() {
     }
   }
 
+  async function handleAddImage() {
+    if (!newImageUrl.trim()) return;
+    setAddingImage(true);
+    setImageError('');
+    try {
+      const result = await apiFetch<CabinImage>(`/admin/room-types/${id}/images`, {
+        method: 'POST',
+        body: JSON.stringify({ url: newImageUrl.trim(), altText: newImageAlt.trim() || null }),
+      });
+      setImages((prev) => [...prev, result]);
+      setNewImageUrl('');
+      setNewImageAlt('');
+    } catch {
+      setImageError('Error al agregar imagen');
+    } finally {
+      setAddingImage(false);
+    }
+  }
+
+  async function handleDeleteImage(imageId: string) {
+    setDeletingImageId(imageId);
+    setImageError('');
+    try {
+      await apiFetch(`/admin/room-types/${id}/images/${imageId}`, { method: 'DELETE' });
+      setImages((prev) => prev.filter((img) => img.id !== imageId));
+    } catch {
+      setImageError('Error al eliminar imagen');
+    } finally {
+      setDeletingImageId(null);
+    }
+  }
+
+  async function handleMoveImage(imageId: string, direction: 'up' | 'down') {
+    const sorted = [...images].sort((a, b) => a.sortOrder - b.sortOrder);
+    const index = sorted.findIndex((img) => img.id === imageId);
+    if (index === -1) return;
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === sorted.length - 1) return;
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    const newOrder = [...sorted];
+    [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
+
+    setReordering(true);
+    setImageError('');
+    try {
+      await apiFetch(`/admin/room-types/${id}/images/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify({ imageIds: newOrder.map((img) => img.id) }),
+      });
+      setImages(newOrder.map((img, i) => ({ ...img, sortOrder: i })));
+    } catch {
+      setImageError('Error al reordenar imágenes');
+    } finally {
+      setReordering(false);
+    }
+  }
+
   if (loading) {
     return (
       <AdminShell title="Cargando…">
@@ -155,35 +221,93 @@ export default function CabinEditPage() {
         {/* Gallery */}
         <Section
           title="Galería"
-          description="Imágenes de la cabaña mostradas en el catálogo público."
+          description="La primera imagen es la portada. Agrega URLs de imágenes para mostrarlas en el catálogo público."
         >
-          {cabin.images && cabin.images.length > 0 ? (
+          {/* Add image */}
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+            <input
+              type="url"
+              className={`${inputCls} flex-1`}
+              placeholder="https://example.com/imagen.jpg"
+              value={newImageUrl}
+              onChange={(e) => setNewImageUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddImage(); } }}
+            />
+            <input
+              className={`${inputCls} sm:w-44`}
+              placeholder="Alt text (opcional)"
+              value={newImageAlt}
+              onChange={(e) => setNewImageAlt(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={addingImage || !newImageUrl.trim()}
+              onClick={handleAddImage}
+              className="shrink-0 rounded-xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {addingImage ? 'Agregando…' : 'Agregar'}
+            </button>
+          </div>
+
+          {imageError && (
+            <p className="mb-3 text-sm font-medium text-red-600">{imageError}</p>
+          )}
+
+          {images.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {cabin.images.map((img, i) => (
-                <div
-                  key={i}
-                  className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-neutral-100"
-                >
-                  <div
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: `url(${img.url})` }}
-                    aria-hidden
-                  />
-                  {i === 0 && (
-                    <div className="absolute bottom-2 left-2 rounded-full bg-neutral-900/80 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      Portada
+              {images.map((img, i) => (
+                <div key={img.id} className="group">
+                  <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-neutral-100">
+                    <div
+                      className="absolute inset-0 bg-cover bg-center"
+                      style={{ backgroundImage: `url(${img.url})` }}
+                      aria-hidden
+                    />
+                    {i === 0 && (
+                      <div className="absolute bottom-2 left-2 rounded-full bg-neutral-900/80 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        Portada
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-1">
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        disabled={i === 0 || reordering}
+                        onClick={() => handleMoveImage(img.id, 'up')}
+                        title="Mover arriba"
+                        className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600 transition hover:bg-neutral-50 disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={i === images.length - 1 || reordering}
+                        onClick={() => handleMoveImage(img.id, 'down')}
+                        title="Mover abajo"
+                        className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600 transition hover:bg-neutral-50 disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
                     </div>
-                  )}
+                    <button
+                      type="button"
+                      disabled={deletingImageId === img.id}
+                      onClick={() => handleDeleteImage(img.id)}
+                      title="Eliminar imagen"
+                      className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {deletingImageId === img.id ? '…' : '✕'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-center">
-              <p className="text-sm font-medium text-neutral-600">
-                Sin imágenes cargadas
-              </p>
+              <p className="text-sm font-medium text-neutral-600">Sin imágenes</p>
               <p className="mt-1 text-xs text-neutral-400">
-                Las imágenes se gestionan desde la API. La carga directa estará disponible próximamente.
+                Agrega una URL de imagen para que aparezca en el catálogo público.
               </p>
             </div>
           )}

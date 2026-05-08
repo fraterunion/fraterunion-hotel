@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -27,7 +28,7 @@ export class RoomTypesService {
       orderBy: { createdAt: 'desc' },
       include: {
         amenities: true,
-        images: true,
+        images: { orderBy: { sortOrder: 'asc' } },
       },
     });
   }
@@ -47,7 +48,7 @@ export class RoomTypesService {
       },
       include: {
         amenities: true,
-        images: true,
+        images: { orderBy: { sortOrder: 'asc' } },
       },
     });
 
@@ -156,6 +157,8 @@ export class RoomTypesService {
         slug: dto.slug,
         description: dto.description,
         basePrice: dto.basePrice,
+        lowOccupancyPrice: dto.lowOccupancyPrice ?? undefined,
+        lowOccupancyThreshold: dto.lowOccupancyThreshold ?? undefined,
         capacityAdults: dto.capacityAdults,
         capacityChildren: dto.capacityChildren,
         bedType: dto.bedType,
@@ -190,6 +193,95 @@ export class RoomTypesService {
 
     return this.prisma.roomType.delete({
       where: { id },
+    });
+  }
+
+  async addImage(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    roomTypeId: string,
+    dto: { url: string; altText?: string },
+  ) {
+    if (!hotelId) throw new NotFoundException('Hotel context not found');
+
+    const roomType = await this.prisma.roomType.findFirst({
+      where: { id: roomTypeId, hotelId, hotel: { tenantId } },
+      select: { id: true },
+    });
+    if (!roomType) throw new NotFoundException('Room type not found');
+
+    const agg = await this.prisma.roomTypeImage.aggregate({
+      where: { roomTypeId },
+      _max: { sortOrder: true },
+    });
+    const sortOrder = (agg._max.sortOrder ?? -1) + 1;
+
+    return this.prisma.roomTypeImage.create({
+      data: {
+        roomTypeId,
+        url: dto.url,
+        altText: dto.altText ?? null,
+        sortOrder,
+      },
+    });
+  }
+
+  async removeImage(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    roomTypeId: string,
+    imageId: string,
+  ) {
+    if (!hotelId) throw new NotFoundException('Hotel context not found');
+
+    const image = await this.prisma.roomTypeImage.findFirst({
+      where: {
+        id: imageId,
+        roomTypeId,
+        roomType: { hotelId, hotel: { tenantId } },
+      },
+      select: { id: true },
+    });
+    if (!image) throw new NotFoundException('Image not found');
+
+    return this.prisma.roomTypeImage.delete({ where: { id: imageId } });
+  }
+
+  async reorderImages(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    roomTypeId: string,
+    imageIds: string[],
+  ) {
+    if (!hotelId) throw new NotFoundException('Hotel context not found');
+
+    const roomType = await this.prisma.roomType.findFirst({
+      where: { id: roomTypeId, hotelId, hotel: { tenantId } },
+      select: { id: true },
+    });
+    if (!roomType) throw new NotFoundException('Room type not found');
+
+    const existing = await this.prisma.roomTypeImage.findMany({
+      where: { roomTypeId },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((i) => i.id));
+    if (imageIds.some((id) => !existingIds.has(id))) {
+      throw new BadRequestException('One or more image IDs not found');
+    }
+
+    await this.prisma.$transaction(
+      imageIds.map((id, index) =>
+        this.prisma.roomTypeImage.update({
+          where: { id },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    return this.prisma.roomTypeImage.findMany({
+      where: { roomTypeId },
+      orderBy: { sortOrder: 'asc' },
     });
   }
 }

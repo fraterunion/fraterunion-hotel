@@ -26,8 +26,8 @@ export class HotelsService {
         settings: true,
         roomTypes: {
           include: {
-            images: true,
-            amenities: true,
+            images: { orderBy: { sortOrder: 'asc' } },
+            amenities: { orderBy: { sortOrder: 'asc' } },
           },
         },
       },

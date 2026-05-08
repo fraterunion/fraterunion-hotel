@@ -144,6 +144,7 @@ export default function CabinDetailPage() {
   const [gallery, setGallery] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState('');
   const [imgFadingOut, setImgFadingOut] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // Booking step
   const [step, setStep] = useState<Step>('dates');
@@ -275,13 +276,25 @@ export default function CabinDetailPage() {
     }
   }, [cabin]);
 
-  function selectThumbnail(src: string) {
-    if (src === selectedImage) return;
-    setImgFadingOut(true);
-    setTimeout(() => {
-      setSelectedImage(src);
-      setImgFadingOut(false);
-    }, 180);
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const len = gallery.length;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowLeft') {
+        setLightboxIndex((prev) => prev === null ? null : (prev - 1 + len) % len);
+      } else if (e.key === 'ArrowRight') {
+        setLightboxIndex((prev) => prev === null ? null : (prev + 1) % len);
+      } else if (e.key === 'Escape') {
+        setLightboxIndex(null);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxIndex, gallery.length]);
+
+  function openLightbox(index: number) {
+    setLightboxIndex(index);
+    setSelectedImage(gallery[index]);
   }
 
   async function handleCheckAvailability(e: React.FormEvent) {
@@ -552,6 +565,14 @@ export default function CabinDetailPage() {
           }}
           aria-hidden
         />
+        {gallery.length > 0 && (
+          <button
+            type="button"
+            onClick={() => openLightbox(gallery.indexOf(selectedImage))}
+            className="absolute inset-0 z-10 cursor-zoom-in"
+            aria-label="Ver galería completa"
+          />
+        )}
         <div
           className="absolute inset-0 bg-gradient-to-t from-[var(--lv-dark)]/80 via-[var(--lv-dark)]/25 to-transparent"
           aria-hidden
@@ -596,7 +617,7 @@ export default function CabinDetailPage() {
                   <button
                     key={i}
                     type="button"
-                    onClick={() => selectThumbnail(src)}
+                    onClick={() => openLightbox(i)}
                     aria-label={`Foto ${i + 1}`}
                     className="shrink-0 overflow-hidden rounded-xl transition-all duration-300"
                     style={{
@@ -1044,6 +1065,67 @@ export default function CabinDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 px-4"
+          onClick={() => setLightboxIndex(null)}
+        >
+          {/* Counter */}
+          <div className="absolute left-1/2 top-4 -translate-x-1/2 text-xs font-semibold tracking-widest text-white/50">
+            {lightboxIndex + 1} / {gallery.length}
+          </div>
+
+          {/* Close */}
+          <button
+            type="button"
+            onClick={() => setLightboxIndex(null)}
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+
+          {/* Prev */}
+          {gallery.length > 1 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex((prev) => prev === null ? null : (prev - 1 + gallery.length) % gallery.length);
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-2xl text-white/70 transition hover:bg-white/20 hover:text-white"
+              aria-label="Anterior"
+            >
+              ‹
+            </button>
+          )}
+
+          {/* Image */}
+          <img
+            src={gallery[lightboxIndex]}
+            alt={`Foto ${lightboxIndex + 1}`}
+            className="max-h-[85vh] max-w-[85vw] rounded-xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* Next */}
+          {gallery.length > 1 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex((prev) => prev === null ? null : (prev + 1) % gallery.length);
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-2xl text-white/70 transition hover:bg-white/20 hover:text-white"
+              aria-label="Siguiente"
+            >
+              ›
+            </button>
+          )}
+        </div>
+      )}
     </main>
   );
 }
