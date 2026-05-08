@@ -159,6 +159,35 @@ export default function CabinDetailPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
 
+  // Prefill from query params when arriving from a WhatsApp bot link
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ci = params.get('checkIn') ?? '';
+    const co = params.get('checkOut') ?? '';
+    const adultsParam = params.get('adults');
+    const childrenParam = params.get('children');
+
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    if (iso.test(ci) && iso.test(co)) {
+      const ciDate = new Date(ci);
+      const coDate = new Date(co);
+      if (!isNaN(ciDate.getTime()) && !isNaN(coDate.getTime()) && coDate > ciDate) {
+        setCheckIn(ci);
+        setCheckOut(co);
+      }
+    }
+
+    if (adultsParam !== null) {
+      const n = parseInt(adultsParam, 10);
+      if (Number.isInteger(n) && n >= 1) setAdults(n);
+    }
+
+    if (childrenParam !== null) {
+      const n = parseInt(childrenParam, 10);
+      if (Number.isInteger(n) && n >= 0) setChildren(n);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     async function load() {
       try {

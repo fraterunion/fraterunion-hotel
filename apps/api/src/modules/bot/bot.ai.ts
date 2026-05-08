@@ -146,6 +146,20 @@ function extractPeople(message: string): number | null {
   return null;
 }
 
+// ── Cabin booking URL builder ─────────────────────────────────────────────────
+
+function buildCabinBookingUrl(slug: string, session: BotSession): string {
+  const base = `${BOOKING_URL}/${slug}`;
+  const { checkInDate, checkOutDate, people } = session;
+  if (!checkInDate || !checkOutDate || !people) return base;
+  const params = new URLSearchParams({
+    checkIn: checkInDate,
+    checkOut: checkOutDate,
+    adults: String(people),
+  });
+  return `${base}?${params.toString()}`;
+}
+
 // ── System prompt (built fresh per request for live date anchor) ──────────────
 
 function buildSystemPrompt(): string {
@@ -241,7 +255,8 @@ export class BotAiService {
       const n = parseInt(input.message.trim(), 10);
       if (n >= 1 && n <= session.availableCabins.length) {
         const cabin = session.availableCabins[n - 1];
-        return `🔥 Excelente elección.\n\nEsta cabaña es de las más solicitadas para esas fechas, así que te recomiendo asegurarla lo antes posible para no perderla.\n\n👉 Aquí puedes reservar en menos de 1 minuto:\n${BOOKING_URL}/${cabin.slug}\n\nSi quieres, puedo ayudarte paso a paso.`;
+        const bookingUrl = buildCabinBookingUrl(cabin.slug, session);
+        return `🔥 Excelente elección.\n\nEsta cabaña es de las más solicitadas para esas fechas, así que te recomiendo asegurarla lo antes posible para no perderla.\n\n👉 Aquí puedes reservar en menos de 1 minuto:\n${bookingUrl}\n\nSi quieres, puedo ayudarte paso a paso.`;
       }
     }
 
@@ -369,7 +384,11 @@ export class BotAiService {
             const availability = await this.botAvailabilityService.searchAvailability(args);
 
             if (availability.availableCabins.length > 0) {
-              saveSession(input.from, { availableCabins: availability.availableCabins });
+              saveSession(input.from, {
+                availableCabins: availability.availableCabins,
+                checkInDate: args.checkInDate,
+                checkOutDate: args.checkOutDate,
+              });
               // Format deterministically — index order matches the stored session array exactly
               const lines = availability.availableCabins
                 .map((c, i) => {
@@ -379,8 +398,12 @@ export class BotAiService {
                 .join('\n');
               cabinListResponse = `🔥 ¡Buenas noticias! Sí tenemos disponibilidad para esas fechas.\n\nEstas son las opciones disponibles:\n\n${lines}\n\n💡 La más reservada suele ser la primera opción.\n\n👉 Responde con el número de la cabaña que prefieras y te ayudo a asegurarla antes de que se agote.`;
             } else {
-              // Clear any stale cabin list so old selections are no longer valid
-              saveSession(input.from, { availableCabins: undefined });
+              // Clear stale cabin list but preserve the resolved ISO dates
+              saveSession(input.from, {
+                availableCabins: undefined,
+                checkInDate: args.checkInDate,
+                checkOutDate: args.checkOutDate,
+              });
             }
 
             toolResultContent = JSON.stringify(availability);
