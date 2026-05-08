@@ -7,11 +7,15 @@ import {
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateRoomTypeDto } from './dto/create-room-type.dto';
 import { UpdateRoomTypeDto } from './dto/update-room-type.dto';
+import { UploadService } from './upload.service';
 import { RoomTypeStatus } from '@prisma/client';
 
 @Injectable()
 export class RoomTypesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly upload: UploadService,
+  ) {}
 
   async findAll(tenantId: string, hotelId?: string | null) {
     if (!hotelId) {
@@ -282,6 +286,36 @@ export class RoomTypesService {
     return this.prisma.roomTypeImage.findMany({
       where: { roomTypeId },
       orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  async addImageFromUpload(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    roomTypeId: string,
+    buffer: Buffer,
+  ) {
+    if (!hotelId) throw new NotFoundException('Hotel context not found');
+
+    const roomType = await this.prisma.roomType.findFirst({
+      where: { id: roomTypeId, hotelId, hotel: { tenantId } },
+      select: { id: true },
+    });
+    if (!roomType) throw new NotFoundException('Room type not found');
+
+    const url = await this.upload.uploadImage(
+      buffer,
+      `los-vagones/cabins/${roomTypeId}`,
+    );
+
+    const agg = await this.prisma.roomTypeImage.aggregate({
+      where: { roomTypeId },
+      _max: { sortOrder: true },
+    });
+    const sortOrder = (agg._max.sortOrder ?? -1) + 1;
+
+    return this.prisma.roomTypeImage.create({
+      data: { roomTypeId, url, altText: null, sortOrder },
     });
   }
 }

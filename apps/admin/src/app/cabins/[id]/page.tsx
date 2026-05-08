@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AdminShell from '../../../components/admin/AdminShell';
 import { apiFetch } from '../../../lib/api';
@@ -77,6 +77,12 @@ export default function CabinEditPage() {
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
   const [imageError, setImageError] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<
+    { id: string; name: string; status: 'uploading' | 'done' | 'error'; errorMsg?: string }[]
+  >([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form fields
   const [name, setName] = useState('');
@@ -138,6 +144,49 @@ export default function CabinEditPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+
+    const newItems = fileArray.map((f) => ({
+      id: Math.random().toString(36).slice(2),
+      name: f.name,
+      status: 'uploading' as const,
+    }));
+    setUploadQueue((prev) => [...prev, ...newItems]);
+
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      const queueId = newItems[i].id;
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const result = await apiFetch<CabinImage>(
+          `/admin/room-types/${id}/images/upload`,
+          { method: 'POST', body: formData },
+        );
+        setImages((prev) => [...prev, result]);
+        setUploadQueue((prev) =>
+          prev.map((u) => (u.id === queueId ? { ...u, status: 'done' as const } : u)),
+        );
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : '';
+        const errorMsg = raw.includes('not configured')
+          ? 'La carga de imágenes aún no está configurada.'
+          : 'Error al subir imagen';
+        setUploadQueue((prev) =>
+          prev.map((u) =>
+            u.id === queueId ? { ...u, status: 'error' as const, errorMsg } : u,
+          ),
+        );
+      }
+    }
+
+    setTimeout(() => {
+      setUploadQueue((prev) => prev.filter((u) => u.status !== 'done'));
+    }, 2500);
   }
 
   async function handleAddImage() {
@@ -221,40 +270,92 @@ export default function CabinEditPage() {
         {/* Gallery */}
         <Section
           title="Galería"
-          description="La primera imagen es la portada. Agrega URLs de imágenes para mostrarlas en el catálogo público."
+          description="La primera imagen es la portada. Arrastra o selecciona fotos para subirlas."
         >
-          {/* Add image */}
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-            <input
-              type="url"
-              className={`${inputCls} flex-1`}
-              placeholder="https://example.com/imagen.jpg"
-              value={newImageUrl}
-              onChange={(e) => setNewImageUrl(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddImage(); } }}
-            />
-            <input
-              className={`${inputCls} sm:w-44`}
-              placeholder="Alt text (opcional)"
-              value={newImageAlt}
-              onChange={(e) => setNewImageAlt(e.target.value)}
-            />
-            <button
-              type="button"
-              disabled={addingImage || !newImageUrl.trim()}
-              onClick={handleAddImage}
-              className="shrink-0 rounded-xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50"
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+
+          {/* Dropzone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              handleFiles(e.dataTransfer.files);
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            className={[
+              'mb-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition',
+              isDragOver
+                ? 'border-neutral-700 bg-neutral-100'
+                : 'border-neutral-300 bg-neutral-50 hover:border-neutral-400 hover:bg-neutral-100',
+            ].join(' ')}
+          >
+            <svg
+              className="h-8 w-8 text-neutral-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
             >
-              {addingImage ? 'Agregando…' : 'Agregar'}
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+              />
+            </svg>
+            <p className="text-sm font-medium text-neutral-700">
+              {isDragOver ? 'Suelta las imágenes aquí' : 'Arrastra imágenes o haz clic para seleccionar'}
+            </p>
+            <p className="text-xs text-neutral-400">JPG, PNG, WEBP · máx. 8 MB por imagen</p>
           </div>
 
-          {imageError && (
-            <p className="mb-3 text-sm font-medium text-red-600">{imageError}</p>
+          {/* Upload queue */}
+          {uploadQueue.length > 0 && (
+            <div className="mb-4 space-y-1.5">
+              {uploadQueue.map((item) => (
+                <div
+                  key={item.id}
+                  className={[
+                    'flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm',
+                    item.status === 'uploading' && 'bg-neutral-100 text-neutral-600',
+                    item.status === 'done' && 'bg-emerald-50 text-emerald-700',
+                    item.status === 'error' && 'bg-red-50 text-red-700',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {item.status === 'uploading' && (
+                    <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-neutral-400 border-t-transparent" />
+                  )}
+                  {item.status === 'done' && <span className="shrink-0">✓</span>}
+                  {item.status === 'error' && <span className="shrink-0">✕</span>}
+                  <span className="truncate">{item.name}</span>
+                  {item.status === 'uploading' && (
+                    <span className="ml-auto shrink-0 text-xs">Subiendo…</span>
+                  )}
+                  {item.status === 'error' && (
+                    <span className="ml-auto shrink-0 text-xs">
+                      {item.errorMsg ?? 'Error al subir'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
 
+          {/* Active images grid */}
           {images.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {images.map((img, i) => (
                 <div key={img.id} className="group">
                   <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-neutral-100">
@@ -269,7 +370,12 @@ export default function CabinEditPage() {
                       </div>
                     )}
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between gap-1">
+                  {img.altText && (
+                    <p className="mt-1 truncate px-0.5 text-[11px] text-neutral-400">
+                      {img.altText}
+                    </p>
+                  )}
+                  <div className="mt-1 flex items-center justify-between gap-1">
                     <div className="flex gap-1">
                       <button
                         type="button"
@@ -303,14 +409,54 @@ export default function CabinEditPage() {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-center">
-              <p className="text-sm font-medium text-neutral-600">Sin imágenes</p>
-              <p className="mt-1 text-xs text-neutral-400">
-                Agrega una URL de imagen para que aparezca en el catálogo público.
-              </p>
+          ) : uploadQueue.length === 0 ? (
+            <div className="mb-4 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-6 py-8 text-center">
+              <p className="text-sm text-neutral-500">Sin imágenes. Sube la primera foto arriba.</p>
             </div>
-          )}
+          ) : null}
+
+          {/* URL fallback — collapsible */}
+          <div className="border-t border-neutral-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowUrlInput((v) => !v)}
+              className="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-neutral-700"
+            >
+              <span>{showUrlInput ? '▾' : '▸'}</span>
+              Agregar por URL
+            </button>
+            {showUrlInput && (
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                <input
+                  type="url"
+                  className={`${inputCls} flex-1`}
+                  placeholder="https://example.com/imagen.jpg"
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); handleAddImage(); }
+                  }}
+                />
+                <input
+                  className={`${inputCls} sm:w-44`}
+                  placeholder="Alt text (opcional)"
+                  value={newImageAlt}
+                  onChange={(e) => setNewImageAlt(e.target.value)}
+                />
+                <button
+                  type="button"
+                  disabled={addingImage || !newImageUrl.trim()}
+                  onClick={handleAddImage}
+                  className="shrink-0 rounded-xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {addingImage ? 'Agregando…' : 'Agregar'}
+                </button>
+              </div>
+            )}
+            {imageError && (
+              <p className="mt-2 text-sm font-medium text-red-600">{imageError}</p>
+            )}
+          </div>
         </Section>
 
         {/* Basic Info */}

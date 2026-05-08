@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,8 +8,11 @@ import {
   Patch,
   Post,
   Put,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { RoomTypesService } from './room-types.service';
 import { JwtAuthGuard } from '../../core/auth/guards/jwt-auth.guard';
 import { CreateRoomTypeDto } from './dto/create-room-type.dto';
@@ -85,5 +89,32 @@ export class RoomTypesController {
     @Body() dto: ReorderRoomTypeImagesDto,
   ) {
     return this.roomTypesService.reorderImages(user.tenantId, user.hotelId, id, dto.imageIds);
+  }
+
+  @Post(':id/images/upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 8 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          cb(new BadRequestException('Only image files are allowed'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+    }),
+  )
+  async uploadImage(
+    @CurrentUser() user: CurrentUserType,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.roomTypesService.addImageFromUpload(
+      user.tenantId,
+      user.hotelId,
+      id,
+      file.buffer,
+    );
   }
 }
