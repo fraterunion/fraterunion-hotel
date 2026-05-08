@@ -33,6 +33,16 @@ type BotCatalogItem = {
   amenities: string[];
 };
 
+type BotQuote = {
+  nights: number;
+  pricePerNight: number;
+  subtotal: number;
+  tax: number;
+  serviceFee: number;
+  total: number;
+  currency: string;
+};
+
 type BotSession = {
   checkInDate?: string;   // ISO YYYY-MM-DD
   checkOutDate?: string;  // ISO YYYY-MM-DD
@@ -48,6 +58,7 @@ type BotSession = {
   guestEmail?: string;
   reservationId?: string;
   checkoutUrl?: string;
+  quote?: BotQuote;
   updatedAt: number;
 };
 
@@ -345,15 +356,21 @@ export class BotAiService {
         saveSession(input.from, { guestEmail: msg, checkoutStep: 'confirm' });
         const updated = getSession(input.from);
         const cabin = updated.selectedCabin;
+
+        // Fetch real quote — fail gracefully, fall back to estimate
+        let quote: BotQuote | null = null;
+        if (cabin && updated.checkInDate && updated.checkOutDate && updated.people) {
+          quote = await this.fetchQuote(cabin, updated);
+          if (quote) saveSession(input.from, { quote });
+        }
+
         const nights =
           updated.checkInDate && updated.checkOutDate
             ? computeNights(updated.checkInDate, updated.checkOutDate)
             : null;
-        const estimatedTotal =
-          cabin && nights !== null ? Math.round(cabin.priceFrom * nights) : null;
         const dateRange =
           updated.checkInDate && updated.checkOutDate
-            ? `${updated.checkInDate} → ${updated.checkOutDate}`
+            ? `${updated.checkInDate} al ${updated.checkOutDate}`
             : updated.rawDateText ?? 'fechas por confirmar';
 
         let summary =
@@ -362,16 +379,30 @@ export class BotAiService {
           `- Fechas: ${dateRange}\n`;
         if (nights !== null) summary += `- Noches: ${nights}\n`;
         summary += `- Personas: ${updated.people}\n`;
-        if (cabin) summary += `- Precio por noche: $${Math.round(cabin.priceFrom).toLocaleString('es-MX')} MXN\n`;
-        if (estimatedTotal !== null) {
-          summary += `- Total estimado: $${estimatedTotal.toLocaleString('es-MX')} MXN*\n`;
+
+        if (quote) {
+          const cur = quote.currency || 'MXN';
+          summary += `\nResumen de pago:\n`;
+          summary += `- Subtotal: $${Math.round(quote.subtotal).toLocaleString('es-MX')} ${cur}\n`;
+          if (quote.tax > 0) {
+            summary += `- IVA: $${Math.round(quote.tax).toLocaleString('es-MX')} ${cur}\n`;
+          }
+          if (quote.serviceFee > 0) {
+            summary += `- Cargo por servicio: $${Math.round(quote.serviceFee).toLocaleString('es-MX')} ${cur}\n`;
+          }
+          summary += `\nTOTAL: $${Math.round(quote.total).toLocaleString('es-MX')} ${cur}\n`;
+        } else {
+          // Fallback: estimate from priceFrom × nights (no tax/fees)
+          const estimatedTotal =
+            cabin && nights !== null ? Math.round(cabin.priceFrom * nights) : null;
+          if (cabin) summary += `- Precio por noche: $${Math.round(cabin.priceFrom).toLocaleString('es-MX')} MXN\n`;
+          if (estimatedTotal !== null) summary += `- Total estimado: $${estimatedTotal.toLocaleString('es-MX')} MXN*\n`;
         }
+
         summary +=
-          `- Nombre: ${updated.guestFirstName} ${updated.guestLastName}\n` +
+          `\n- Nombre: ${updated.guestFirstName} ${updated.guestLastName}\n` +
           `- Email: ${msg}\n\n`;
-        if (estimatedTotal !== null) {
-          summary += `*El total final puede incluir impuestos y cargos adicionales.\n\n`;
-        }
+        if (!quote) summary += `*El total final puede incluir impuestos y cargos adicionales.\n\n`;
         summary += `Responde "sí" para generarte el link de pago, o "no" para corregir.`;
         return summary;
       }
@@ -463,6 +494,7 @@ export class BotAiService {
             guestFirstName: undefined,
             guestLastName: undefined,
             guestEmail: undefined,
+            quote: undefined,
           });
           return `Sin problema 😊 Empecemos de nuevo.\n\n👉 ¿Para cuántas personas sería la estancia?`;
         }
@@ -656,6 +688,43 @@ export class BotAiService {
     const checkoutUrl = data?.checkoutUrl as string | undefined;
     if (!checkoutUrl) throw new Error('Payments API response missing checkoutUrl');
     return checkoutUrl;
+  }
+
+  private async fetchQuote(cabin: BotCabin, session: BotSession): Promise<BotQuote | null> {
+    const { checkInDate, checkOutDate, people } = session;
+    if (!checkInDate || !checkOutDate || !people) return null;
+    const url = `${this.baseUrl}/api/public/reservations/quote`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hotelSlug: BOT_HOTEL_SLUG,
+          roomTypeId: cabin.id,
+          checkInDate,
+          checkOutDate,
+          adults: people,
+          children: 0,
+        }),
+      });
+      if (!res.ok) {
+        this.logger.warn(`[BOT QUOTE] API returned HTTP ${res.status}`);
+        return null;
+      }
+      const data = await res.json();
+      return {
+        nights: Number(data.nights),
+        pricePerNight: Number(data.pricePerNight),
+        subtotal: Number(data.subtotal),
+        tax: Number(data.tax),
+        serviceFee: Number(data.serviceFee),
+        total: Number(data.total),
+        currency: String(data.currency ?? 'MXN'),
+      };
+    } catch (err: any) {
+      this.logger.warn(`[BOT QUOTE] fetch failed: ${err?.message}`);
+      return null;
+    }
   }
 
   private async callOpenAi(
