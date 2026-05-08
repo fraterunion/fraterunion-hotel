@@ -15,6 +15,7 @@ const navItems = [
   { label: 'Reservations', href: '/reservations' },
   { label: 'Cabins', href: '/cabins' },
   { label: 'Calendar', href: '/calendar' },
+  { label: 'AI Analytics', href: '/analytics/ai-concierge' },
 ];
 
 export default function AdminShell({ title, subtitle, children }: Props) {

@@ -19,6 +19,7 @@ import { EmailModule } from './modules/core/email/email.module';
 import { BlocksModule } from './modules/hotel/blocks/blocks.module';
 import { BotModule } from './modules/bot/bot.module';
 import { BotAnalyticsModule } from './modules/bot/bot.analytics.module';
+import { BotMetricsModule } from './modules/bot/bot.metrics.module';
 
 
 @Module({
@@ -43,6 +44,7 @@ import { BotAnalyticsModule } from './modules/bot/bot.analytics.module';
     BlocksModule,
     BotModule,
     BotAnalyticsModule,
+    BotMetricsModule,
   ],
   controllers: [AppController],
 })
