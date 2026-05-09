@@ -91,6 +91,14 @@ export class RoomTypesController {
     return this.roomTypesService.reorderImages(user.tenantId, user.hotelId, id, dto.imageIds);
   }
 
+  @Post(':id/images/import-static')
+  async importStaticImages(
+    @CurrentUser() user: CurrentUserType,
+    @Param('id') id: string,
+  ) {
+    return this.roomTypesService.importStaticImages(user.tenantId, user.hotelId, id);
+  }
+
   @Post(':id/images/upload')
   @UseInterceptors(
     FileInterceptor('file', {

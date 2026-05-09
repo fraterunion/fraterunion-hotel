@@ -82,6 +82,8 @@ export default function CabinEditPage() {
   const [uploadQueue, setUploadQueue] = useState<
     { id: string; name: string; status: 'uploading' | 'done' | 'error'; errorMsg?: string }[]
   >([]);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form fields
@@ -143,6 +145,32 @@ export default function CabinEditPage() {
       setSaveError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    setImportMessage('');
+    try {
+      const result = await apiFetch<{ imported: number; images: CabinImage[] }>(
+        `/admin/room-types/${id}/images/import-static`,
+        { method: 'POST' },
+      );
+      setImages(result.images);
+      setImportMessage(
+        result.imported > 0
+          ? `${result.imported} imagen${result.imported === 1 ? '' : 'es'} importada${result.imported === 1 ? '' : 's'}.`
+          : 'No se encontraron imágenes nuevas para importar.',
+      );
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : '';
+      setImportMessage(
+        raw.includes('WEB_APP_URL')
+          ? 'URL del sitio web no configurada.'
+          : 'Error al importar imágenes.',
+      );
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -412,6 +440,17 @@ export default function CabinEditPage() {
           ) : uploadQueue.length === 0 ? (
             <div className="mb-4 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-6 py-8 text-center">
               <p className="text-sm text-neutral-500">Sin imágenes. Sube la primera foto arriba.</p>
+              <button
+                type="button"
+                disabled={importing}
+                onClick={handleImport}
+                className="mt-3 rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {importing ? 'Importando…' : 'Importar imágenes actuales del website'}
+              </button>
+              {importMessage && (
+                <p className="mt-2 text-xs text-neutral-500">{importMessage}</p>
+              )}
             </div>
           ) : null}
 

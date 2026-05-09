@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateRoomTypeDto } from './dto/create-room-type.dto';
 import { UpdateRoomTypeDto } from './dto/update-room-type.dto';
@@ -15,6 +16,7 @@ export class RoomTypesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly upload: UploadService,
+    private readonly config: ConfigService,
   ) {}
 
   async findAll(tenantId: string, hotelId?: string | null) {
@@ -317,5 +319,81 @@ export class RoomTypesService {
     return this.prisma.roomTypeImage.create({
       data: { roomTypeId, url, altText: null, sortOrder },
     });
+  }
+
+  async importStaticImages(
+    tenantId: string,
+    hotelId: string | null | undefined,
+    roomTypeId: string,
+  ) {
+    if (!hotelId) throw new NotFoundException('Hotel context not found');
+
+    const roomType = await this.prisma.roomType.findFirst({
+      where: { id: roomTypeId, hotelId, hotel: { tenantId } },
+      select: { id: true, slug: true },
+    });
+    if (!roomType) throw new NotFoundException('Room type not found');
+
+    const webUrl = this.config.get<string>('WEB_APP_URL');
+    if (!webUrl) throw new BadRequestException('WEB_APP_URL is not configured');
+
+    const base = `${webUrl.replace(/\/$/, '')}/images/cabins/${roomType.slug}`;
+    const candidates = [
+      'hero.jpg',
+      ...Array.from({ length: 12 }, (_, i) =>
+        `gallery-${String(i + 1).padStart(2, '0')}.jpg`,
+      ),
+    ];
+
+    const existing = await this.prisma.roomTypeImage.findMany({
+      where: { roomTypeId },
+      select: { url: true, sortOrder: true },
+    });
+    const existingUrls = new Set(existing.map((img) => img.url));
+    let sortOrder = existing.reduce((max, img) => Math.max(max, img.sortOrder), -1) + 1;
+
+    const created: { id: string; url: string; altText: string | null; sortOrder: number }[] = [];
+
+    for (const filename of candidates) {
+      const url = `${base}/${filename}`;
+      if (existingUrls.has(url)) continue;
+      if (!(await this.urlExists(url))) continue;
+      const img = await this.prisma.roomTypeImage.create({
+        data: { roomTypeId, url, altText: null, sortOrder },
+      });
+      created.push(img);
+      sortOrder++;
+    }
+
+    const images = await this.prisma.roomTypeImage.findMany({
+      where: { roomTypeId },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return { imported: created.length, images };
+  }
+
+  private async urlExists(url: string): Promise<boolean> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch(url, { method: 'HEAD', signal: controller.signal });
+      if (res.status === 405) {
+        clearTimeout(timer);
+        const c2 = new AbortController();
+        const t2 = setTimeout(() => c2.abort(), 5000);
+        try {
+          const r2 = await fetch(url, { method: 'GET', signal: c2.signal });
+          return r2.ok;
+        } finally {
+          clearTimeout(t2);
+        }
+      }
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
