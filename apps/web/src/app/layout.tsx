@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { hotelConfig } from '@fraterunion/config';
+import { SiteFooter } from '../components/site/Footer';
 
 export const metadata: Metadata = {
   title: `${hotelConfig.hotelShortName} · Reservas`,
@@ -20,7 +21,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es-MX">
-      <body>{children}</body>
+      <body>
+        {children}
+        <SiteFooter />
+      </body>
     </html>
   );
 }
