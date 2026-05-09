@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { hotelConfig } from '@fraterunion/config';
 import { SiteFooter } from '../components/site/Footer';
+import { FloatingWhatsAppButton } from '../components/site/FloatingWhatsAppButton';
 
 export const metadata: Metadata = {
   title: `${hotelConfig.hotelShortName} · Reservas`,
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body>
         {children}
         <SiteFooter />
+        <FloatingWhatsAppButton />
       </body>
     </html>
   );
