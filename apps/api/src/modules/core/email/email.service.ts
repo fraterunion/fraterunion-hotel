@@ -121,29 +121,25 @@ export class EmailService {
 
     const subject = `Reserva recibida · Los Vagones`;
 
-    const logoRow = this.logoUrl
-      ? `
-        <tr>
-          <td style="background-color:#ffffff;padding:28px 48px 0;text-align:center;">
-            <img src="${this.logoUrl}" alt="Los Vagones" width="100" height="100"
-                 style="display:block;margin:0 auto;border:0;width:100px;height:100px;" />
-          </td>
-        </tr>`
-      : '';
+    const logoSection = this.logoUrl
+      ? `<img src="${this.logoUrl}" alt="Los Vagones" width="150" height="150"
+             style="display:block;margin:0 auto;border:0;width:150px;height:150px;" />`
+      : `<p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:28px;
+                   letter-spacing:8px;color:#f0e8dc;text-transform:uppercase;
+                   font-weight:normal;">Los Vagones</p>`;
 
     const checkoutBlock = params.checkoutUrl
       ? `
-        <!-- Checkout CTA -->
         <tr>
-          <td style="padding:0 48px 32px;">
+          <td style="background-color:#1a1d21;padding:0 48px 32px;">
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td align="center">
                   <a href="${esc(params.checkoutUrl)}"
-                     style="display:block;background-color:#9b5c2a;color:#ffffff;
-                            font-family:Arial,Helvetica,sans-serif;font-size:13px;
-                            font-weight:bold;letter-spacing:2px;text-decoration:none;
-                            text-align:center;padding:15px 24px;border-radius:3px;
+                     style="display:inline-block;background-color:#9b6840;color:#ffffff;
+                            font-family:Arial,Helvetica,sans-serif;font-size:12px;
+                            font-weight:bold;letter-spacing:3px;text-decoration:none;
+                            text-align:center;padding:16px 36px;border-radius:4px;
                             text-transform:uppercase;">
                     Completar pago ahora &rarr;
                   </a>
@@ -161,163 +157,129 @@ export class EmailService {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${subject}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f1ec;">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f1ec;">
+<body style="margin:0;padding:0;background-color:#111315;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#111315;">
   <tr>
-    <td align="center" style="padding:40px 16px;">
+    <td align="center" style="padding:36px 16px 48px;">
 
-      <!-- Card wrapper -->
       <table width="100%" cellpadding="0" cellspacing="0" border="0"
-             style="max-width:580px;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+             style="max-width:640px;background-color:#1a1d21;border-radius:8px;
+                    overflow:hidden;border:1px solid rgba(255,255,255,0.07);">
 
-        ${logoRow}
-
-        <!-- ── Header ── -->
+        <!-- Logo -->
         <tr>
-          <td style="background-color:#1a1a1a;padding:36px 48px;text-align:center;">
-            <p style="margin:0;font-family:Georgia,serif;font-size:24px;letter-spacing:8px;
-                      color:#ffffff;text-transform:uppercase;font-weight:normal;">
-              Los Vagones
-            </p>
-            <p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;
-                      letter-spacing:3px;color:#888888;text-transform:uppercase;">
-              La Marquesa &nbsp;&bull;&nbsp; Estado de M&eacute;xico
+          <td style="background-color:#1a1d21;padding:44px 48px 32px;text-align:center;">
+            ${logoSection}
+          </td>
+        </tr>
+
+        <!-- Status bar -->
+        <tr>
+          <td style="background-color:#2e1f0a;padding:13px 48px;text-align:center;">
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                      letter-spacing:4px;color:#c8956a;text-transform:uppercase;">
+              &#9679;&nbsp;&nbsp;Reserva recibida &mdash; Pago pendiente
             </p>
           </td>
         </tr>
 
-        <!-- ── Status bar ── -->
+        <!-- Greeting -->
         <tr>
-          <td style="background-color:#5c3d14;padding:13px 48px;text-align:center;">
-            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;
-                      letter-spacing:3px;color:#e8b86d;text-transform:uppercase;">
-              &#9679;&nbsp; Reserva recibida &mdash; pago pendiente
-            </p>
-          </td>
-        </tr>
-
-        <!-- ── Greeting ── -->
-        <tr>
-          <td style="padding:40px 48px 0;">
-            <p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;
-                      color:#999999;text-transform:uppercase;letter-spacing:2px;">
+          <td style="background-color:#1a1d21;padding:44px 48px 0;">
+            <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                      color:#4a4a52;text-transform:uppercase;letter-spacing:3px;">
               Hola,
             </p>
-            <h1 style="margin:0 0 20px;font-family:Georgia,serif;font-size:30px;
-                       color:#1a1a1a;font-weight:normal;line-height:1.2;">
+            <h1 style="margin:0 0 20px;font-family:Georgia,'Times New Roman',serif;
+                       font-size:36px;color:#f0e8dc;font-weight:normal;line-height:1.15;">
               ${guestName}
             </h1>
             <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;
-                      line-height:1.8;color:#555555;">
+                      line-height:1.85;color:#8a8680;">
               Recibimos tu solicitud de reserva. Para confirmar tu estancia,
               completa el pago con los datos que se muestran a continuaci&oacute;n.
             </p>
           </td>
         </tr>
 
-        <!-- ── Reservation details card ── -->
+        <!-- Details card -->
         <tr>
-          <td style="padding:32px 48px;">
+          <td style="background-color:#1a1d21;padding:32px 48px;">
             <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="background:#f9f7f4;border:1px solid #e8e3db;border-radius:4px;">
-
-              <!-- Card title -->
+                   style="background-color:#141618;border:1px solid rgba(255,255,255,0.06);
+                          border-radius:6px;">
               <tr>
                 <td style="padding:20px 24px 0;">
                   <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;
-                            letter-spacing:3px;color:#999999;text-transform:uppercase;">
+                            letter-spacing:3px;color:#484850;text-transform:uppercase;">
                     Detalles de tu reserva
                   </p>
                 </td>
               </tr>
-              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Código de reserva -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">C&oacute;digo de reserva</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#1a1a1a;letter-spacing:1px;">${reservationCode}</td>
-                  </tr></table>
-                </td>
-              </tr>
-              <tr><td style="padding:16px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:16px 24px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">C&oacute;digo de reserva</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#f0e8dc;letter-spacing:1px;">${reservationCode}</td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Cabaña -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Caba&ntilde;a</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${cabinName}</td>
-                  </tr></table>
-                </td>
-              </tr>
-              <tr><td style="padding:16px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:16px 24px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Caba&ntilde;a</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${cabinName}</td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Check-in -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Check-in</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${checkInFmt}</td>
-                  </tr></table>
-                </td>
-              </tr>
-              <tr><td style="padding:16px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:16px 24px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Check-in</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${checkInFmt}</td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Check-out -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Check-out</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${checkOutFmt}</td>
-                  </tr></table>
-                </td>
-              </tr>
-              <tr><td style="padding:16px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:16px 24px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Check-out</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${checkOutFmt}</td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Noches -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Noches</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${params.nights}</td>
-                  </tr></table>
-                </td>
-              </tr>
-              <tr><td style="padding:16px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:16px 24px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Noches</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${params.nights}</td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Huéspedes -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Hu&eacute;spedes</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">${guestsLine}</td>
-                  </tr></table>
-                </td>
-              </tr>
-              <tr><td style="padding:16px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:16px 24px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Hu&eacute;spedes</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${guestsLine}</td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Total -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Total</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:bold;color:#1a1a1a;">${amountFmt}</td>
-                  </tr></table>
-                </td>
-              </tr>
-              <tr><td style="padding:16px 24px 0;"><div style="height:1px;background:#e8e3db;"></div></td></tr>
+              <tr><td style="padding:16px 24px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Total</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:bold;color:#f0e8dc;">${amountFmt}</td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Estado de pago -->
-              <tr>
-                <td style="padding:16px 24px 24px;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                    <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">Estado de pago</td>
-                    <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#9b5c2a;">Pendiente</td>
-                  </tr></table>
-                </td>
-              </tr>
+              <tr><td style="padding:16px 24px 24px;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Estado de pago</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#c8956a;">Pendiente</td>
+                </tr></table>
+              </td></tr>
 
             </table>
           </td>
@@ -325,24 +287,25 @@ export class EmailService {
 
         ${checkoutBlock}
 
-        <!-- ── Info note ── -->
+        <!-- Info box -->
         <tr>
-          <td style="padding:0 48px 36px;">
+          <td style="background-color:#1a1d21;padding:0 48px 32px;">
             <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="border-left:3px solid #9b5c2a;background:#fdf9f5;">
+                   style="background-color:#f2e8d8;border-radius:6px;">
               <tr>
-                <td style="padding:16px 20px;">
-                  <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:13px;
-                            line-height:1.7;color:#555555;">
-                    <strong style="color:#1a1a1a;">Llegada:</strong> a partir de las 15:00 hrs<br>
-                    <strong style="color:#1a1a1a;">Salida:</strong> antes de las 11:00 hrs
+                <td style="padding:20px 24px;">
+                  <p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;
+                            line-height:1.75;color:#3a2e24;">
+                    <strong>Llegada:</strong> a partir de las 15:00 hrs
+                    &nbsp;&bull;&nbsp;
+                    <strong>Salida:</strong> antes de las 11:00 hrs
                   </p>
                   <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;
-                            line-height:1.7;color:#555555;">
+                            line-height:1.75;color:#3a2e24;">
                     &iquest;Preguntas? Escr&iacute;benos a
                     <a href="mailto:losvagonesmex@gmail.com"
-                       style="color:#9b5c2a;text-decoration:none;">losvagonesmex@gmail.com</a>
-                    o ll&aacute;manos al +52&nbsp;55&nbsp;8284&nbsp;3604.
+                       style="color:#7a4e28;text-decoration:none;font-weight:bold;">losvagonesmex@gmail.com</a>
+                    &nbsp;&bull;&nbsp; +52&nbsp;55&nbsp;8284&nbsp;3604
                   </p>
                 </td>
               </tr>
@@ -350,37 +313,21 @@ export class EmailService {
           </td>
         </tr>
 
-        <!-- ── Closing message ── -->
+        <!-- Footer -->
         <tr>
-          <td style="padding:0 48px 48px;text-align:center;">
-            <p style="margin:0;font-family:Georgia,serif;font-size:16px;line-height:1.8;
-                      color:#2c2c2c;font-style:italic;">
-              Gracias por elegir Los Vagones.<br>
-              Te esperamos para disfrutar una estancia &uacute;nica en La Marquesa.
+          <td style="background-color:#141618;padding:32px 48px;text-align:center;">
+            <p style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;
+                      font-size:15px;color:#4a4850;font-style:italic;">
+              Gracias por elegir Los Vagones.
             </p>
-          </td>
-        </tr>
-
-        <!-- ── Footer ── -->
-        <tr>
-          <td style="background-color:#1a1a1a;padding:28px 48px;text-align:center;">
-            <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;
-                      letter-spacing:2px;color:#666666;text-transform:uppercase;">
-              Los Vagones &nbsp;&bull;&nbsp; La Marquesa, Estado de M&eacute;xico
-            </p>
-            <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;
-                      font-size:11px;color:#555555;">
-              losvagonesmex@gmail.com &nbsp;&bull;&nbsp; +52 55 8284 3604
-            </p>
-            <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;
-                      font-size:10px;color:#444444;">
-              Este correo fue generado autom&aacute;ticamente. Por favor no respondas a este mensaje.
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;
+                      letter-spacing:2px;color:#383840;text-transform:uppercase;">
+              La Marquesa &nbsp;&bull;&nbsp; Estado de M&eacute;xico
             </p>
           </td>
         </tr>
 
       </table>
-      <!-- / Card wrapper -->
 
     </td>
   </tr>
@@ -476,15 +423,12 @@ losvagonesmex@gmail.com · +52 55 8284 3604`;
 
     const subject = `Pago confirmado — Los Vagones`;
 
-    const logoRow = this.logoUrl
-      ? `
-        <tr>
-          <td style="background-color:#ffffff;padding:28px 48px 0;text-align:center;">
-            <img src="${this.logoUrl}" alt="Los Vagones" width="100" height="100"
-                 style="display:block;margin:0 auto;border:0;width:100px;height:100px;" />
-          </td>
-        </tr>`
-      : '';
+    const logoSection = this.logoUrl
+      ? `<img src="${this.logoUrl}" alt="Los Vagones" width="150" height="150"
+             style="display:block;margin:0 auto;border:0;width:150px;height:150px;" />`
+      : `<p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:28px;
+                   letter-spacing:8px;color:#f0e8dc;text-transform:uppercase;
+                   font-weight:normal;">Los Vagones</p>`;
 
     const html = `<!DOCTYPE html>
 <html lang="es">
@@ -493,253 +437,174 @@ losvagonesmex@gmail.com · +52 55 8284 3604`;
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${subject}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f1ec;">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f1ec;">
+<body style="margin:0;padding:0;background-color:#111315;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#111315;">
   <tr>
-    <td align="center" style="padding:40px 16px;">
+    <td align="center" style="padding:36px 16px 48px;">
 
-      <!-- Card wrapper -->
       <table width="100%" cellpadding="0" cellspacing="0" border="0"
-             style="max-width:580px;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+             style="max-width:640px;background-color:#1a1d21;border-radius:8px;
+                    overflow:hidden;border:1px solid rgba(255,255,255,0.07);">
 
-        ${logoRow}
-
-        <!-- ── Header ── -->
+        <!-- Logo -->
         <tr>
-          <td style="background-color:#1a1a1a;padding:36px 48px;text-align:center;">
-            <p style="margin:0;font-family:Georgia,serif;font-size:24px;letter-spacing:8px;
-                      color:#ffffff;text-transform:uppercase;font-weight:normal;">
-              Los Vagones
-            </p>
-            <p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;
-                      letter-spacing:3px;color:#888888;text-transform:uppercase;">
-              La Marquesa &nbsp;&bull;&nbsp; Estado de M&eacute;xico
+          <td style="background-color:#1a1d21;padding:44px 48px 32px;text-align:center;">
+            ${logoSection}
+          </td>
+        </tr>
+
+        <!-- Status bar -->
+        <tr>
+          <td style="background-color:#0f2018;padding:13px 48px;text-align:center;">
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                      letter-spacing:4px;color:#6aab6a;text-transform:uppercase;">
+              &#10003;&nbsp;&nbsp;Pago confirmado
             </p>
           </td>
         </tr>
 
-        <!-- ── Confirmation bar ── -->
+        <!-- Greeting -->
         <tr>
-          <td style="background-color:#2a5025;padding:13px 48px;text-align:center;">
-            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;
-                      letter-spacing:3px;color:#8ecb82;text-transform:uppercase;">
-              &#10003;&nbsp; Pago confirmado
-            </p>
-          </td>
-        </tr>
-
-        <!-- ── Greeting ── -->
-        <tr>
-          <td style="padding:40px 48px 0;">
-            <p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;
-                      color:#999999;text-transform:uppercase;letter-spacing:2px;">
+          <td style="background-color:#1a1d21;padding:44px 48px 0;">
+            <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                      color:#4a4a52;text-transform:uppercase;letter-spacing:3px;">
               Hola,
             </p>
-            <h1 style="margin:0 0 20px;font-family:Georgia,serif;font-size:30px;
-                       color:#1a1a1a;font-weight:normal;line-height:1.2;">
+            <h1 style="margin:0 0 20px;font-family:Georgia,'Times New Roman',serif;
+                       font-size:36px;color:#f0e8dc;font-weight:normal;line-height:1.15;">
               ${guestName}
             </h1>
             <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;
-                      line-height:1.8;color:#555555;">
+                      line-height:1.85;color:#8a8680;">
               Tu pago fue recibido correctamente y tu reserva ha quedado confirmada.
               Te esperamos para disfrutar una estancia &uacute;nica en La Marquesa.
             </p>
           </td>
         </tr>
 
-        <!-- ── Reservation details card ── -->
+        <!-- Details card -->
         <tr>
-          <td style="padding:32px 48px;">
+          <td style="background-color:#1a1d21;padding:32px 48px;">
             <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="background:#f9f7f4;border:1px solid #e8e3db;border-radius:4px;">
-
-              <!-- Card title -->
+                   style="background-color:#141618;border:1px solid rgba(255,255,255,0.06);
+                          border-radius:6px;">
               <tr>
                 <td style="padding:20px 24px 0;">
                   <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;
-                            letter-spacing:3px;color:#999999;text-transform:uppercase;">
+                            letter-spacing:3px;color:#484850;text-transform:uppercase;">
                     Detalles de tu reserva
                   </p>
                 </td>
               </tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Divider -->
-              <tr><td style="padding:14px 24px 0;">
-                <div style="height:1px;background:#e8e3db;"></div>
-              </td></tr>
-
-              <!-- Código de reserva -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">
-                        C&oacute;digo de reserva
-                      </td>
-                      <td align="right"
-                          style="font-family:Arial,Helvetica,sans-serif;font-size:13px;
-                                 font-weight:bold;color:#1a1a1a;letter-spacing:1px;">
-                        ${reservationCode}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              <!-- Divider -->
               <tr><td style="padding:16px 24px 0;">
-                <div style="height:1px;background:#e8e3db;"></div>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">C&oacute;digo de reserva</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#f0e8dc;letter-spacing:1px;">${reservationCode}</td>
+                </tr></table>
               </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Cabaña -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">
-                        Caba&ntilde;a
-                      </td>
-                      <td align="right"
-                          style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">
-                        ${cabinName}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              <!-- Divider -->
               <tr><td style="padding:16px 24px 0;">
-                <div style="height:1px;background:#e8e3db;"></div>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Caba&ntilde;a</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${cabinName}</td>
+                </tr></table>
               </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Check-in -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">
-                        Check-in
-                      </td>
-                      <td align="right"
-                          style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">
-                        ${checkInFmt}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              <!-- Divider -->
               <tr><td style="padding:16px 24px 0;">
-                <div style="height:1px;background:#e8e3db;"></div>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Check-in</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${checkInFmt}</td>
+                </tr></table>
               </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Check-out -->
-              <tr>
-                <td style="padding:16px 24px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">
-                        Check-out
-                      </td>
-                      <td align="right"
-                          style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#2c2c2c;">
-                        ${checkOutFmt}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              <!-- Divider -->
               <tr><td style="padding:16px 24px 0;">
-                <div style="height:1px;background:#e8e3db;"></div>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Check-out</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cdc5bb;">${checkOutFmt}</td>
+                </tr></table>
               </td></tr>
+              <tr><td style="padding:14px 24px 0;"><div style="height:1px;background:rgba(255,255,255,0.06);"></div></td></tr>
 
-              <!-- Total pagado -->
-              <tr>
-                <td style="padding:16px 24px 24px;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999999;">
-                        Total pagado
-                      </td>
-                      <td align="right"
-                          style="font-family:Arial,Helvetica,sans-serif;font-size:18px;
-                                 font-weight:bold;color:#1a1a1a;">
-                        ${amountFmt}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
+              <tr><td style="padding:16px 24px 24px;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#585858;">Total pagado</td>
+                  <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:bold;color:#f0e8dc;">${amountFmt}</td>
+                </tr></table>
+              </td></tr>
 
             </table>
           </td>
         </tr>
 
-        <!-- ── Action buttons ── -->
+        <!-- Action buttons -->
         <tr>
-          <td style="padding:0 48px 32px;">
-
-            <!-- Calendar button -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="margin-bottom:12px;">
+          <td style="background-color:#1a1d21;padding:0 48px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;">
               <tr>
                 <td align="center">
                   <a href="${calendarUrl}"
-                     style="display:block;background-color:#9b5c2a;color:#ffffff;
-                            font-family:Arial,Helvetica,sans-serif;font-size:13px;
-                            font-weight:bold;letter-spacing:2px;text-decoration:none;
-                            text-align:center;padding:15px 24px;border-radius:3px;
+                     style="display:inline-block;background-color:#9b6840;color:#ffffff;
+                            font-family:Arial,Helvetica,sans-serif;font-size:12px;
+                            font-weight:bold;letter-spacing:3px;text-decoration:none;
+                            text-align:center;padding:16px 32px;border-radius:4px;
                             text-transform:uppercase;">
                     + Agregar al calendario
                   </a>
                 </td>
               </tr>
             </table>
-
-            <!-- Maps row -->
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td width="49%" style="padding-right:6px;">
                   <a href="${GOOGLE_MAPS_URL}"
-                     style="display:block;background-color:#2c2c2c;color:#ffffff;
-                            font-family:Arial,Helvetica,sans-serif;font-size:12px;
-                            letter-spacing:1px;text-decoration:none;text-align:center;
-                            padding:13px 16px;border-radius:3px;">
+                     style="display:block;background-color:#252830;color:#c0b8b0;
+                            font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                            letter-spacing:2px;text-decoration:none;text-align:center;
+                            padding:14px 16px;border-radius:4px;text-transform:uppercase;
+                            border:1px solid rgba(255,255,255,0.08);">
                     Google Maps
                   </a>
                 </td>
                 <td width="2%"></td>
                 <td width="49%" style="padding-left:6px;">
                   <a href="${WAZE_URL}"
-                     style="display:block;background-color:#2c2c2c;color:#ffffff;
-                            font-family:Arial,Helvetica,sans-serif;font-size:12px;
-                            letter-spacing:1px;text-decoration:none;text-align:center;
-                            padding:13px 16px;border-radius:3px;">
+                     style="display:block;background-color:#252830;color:#c0b8b0;
+                            font-family:Arial,Helvetica,sans-serif;font-size:11px;
+                            letter-spacing:2px;text-decoration:none;text-align:center;
+                            padding:14px 16px;border-radius:4px;text-transform:uppercase;
+                            border:1px solid rgba(255,255,255,0.08);">
                     Waze
                   </a>
                 </td>
               </tr>
             </table>
-
           </td>
         </tr>
 
-        <!-- ── Helpful note ── -->
+        <!-- Info box -->
         <tr>
-          <td style="padding:0 48px 36px;">
+          <td style="background-color:#1a1d21;padding:0 48px 32px;">
             <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="border-left:3px solid #9b5c2a;background:#fdf9f5;">
+                   style="background-color:#f2e8d8;border-radius:6px;">
               <tr>
-                <td style="padding:16px 20px;">
+                <td style="padding:20px 24px;">
+                  <p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;
+                            line-height:1.75;color:#3a2e24;">
+                    <strong>Llegada:</strong> a partir de las 15:00 hrs
+                    &nbsp;&bull;&nbsp;
+                    <strong>Salida:</strong> antes de las 11:00 hrs
+                  </p>
                   <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;
-                            line-height:1.7;color:#555555;">
-                    Te recomendamos revisar tu ruta antes de salir y tener a la mano tu
-                    c&oacute;digo de reserva
-                    <strong style="color:#1a1a1a;">${reservationCode}</strong>.
+                            line-height:1.75;color:#3a2e24;">
+                    Ten a la mano tu c&oacute;digo <strong>${reservationCode}</strong>.
+                    &iquest;Preguntas?
+                    <a href="mailto:losvagonesmex@gmail.com"
+                       style="color:#7a4e28;text-decoration:none;font-weight:bold;">losvagonesmex@gmail.com</a>
                   </p>
                 </td>
               </tr>
@@ -747,37 +612,21 @@ losvagonesmex@gmail.com · +52 55 8284 3604`;
           </td>
         </tr>
 
-        <!-- ── Closing message ── -->
+        <!-- Footer -->
         <tr>
-          <td style="padding:0 48px 48px;text-align:center;">
-            <p style="margin:0;font-family:Georgia,serif;font-size:16px;line-height:1.8;
-                      color:#2c2c2c;font-style:italic;">
-              Gracias por elegir Los Vagones.<br>
-              Te esperamos para disfrutar una estancia &uacute;nica en La Marquesa.
+          <td style="background-color:#141618;padding:32px 48px;text-align:center;">
+            <p style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;
+                      font-size:15px;color:#4a4850;font-style:italic;">
+              Gracias por elegir Los Vagones.
             </p>
-          </td>
-        </tr>
-
-        <!-- ── Footer ── -->
-        <tr>
-          <td style="background-color:#1a1a1a;padding:28px 48px;text-align:center;">
-            <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;
-                      letter-spacing:2px;color:#666666;text-transform:uppercase;">
-              Los Vagones &nbsp;&bull;&nbsp; La Marquesa, Estado de M&eacute;xico
-            </p>
-            <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;
-                      font-size:11px;color:#555555;">
-              losvagonesmex@gmail.com &nbsp;&bull;&nbsp; +52 55 8284 3604
-            </p>
-            <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;
-                      font-size:10px;color:#444444;">
-              Este correo fue generado autom&aacute;ticamente. Por favor no respondas a este mensaje.
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;
+                      letter-spacing:2px;color:#383840;text-transform:uppercase;">
+              La Marquesa &nbsp;&bull;&nbsp; Estado de M&eacute;xico
             </p>
           </td>
         </tr>
 
       </table>
-      <!-- / Card wrapper -->
 
     </td>
   </tr>
