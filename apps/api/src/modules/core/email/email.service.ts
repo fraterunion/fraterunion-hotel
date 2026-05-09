@@ -67,6 +67,7 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly resend: Resend | null;
   private readonly from: string;
+  private readonly logoUrl: string;
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY') || '';
@@ -74,10 +75,16 @@ export class EmailService {
       this.configService.get<string>('EMAIL_FROM') ||
       'HotelOS <onboarding@resend.dev>';
 
+    const webAppUrl = this.configService.get<string>('WEB_APP_URL') ?? '';
+    this.logoUrl = webAppUrl
+      ? `${webAppUrl.replace(/\/$/, '')}/apple-touch-icon.png`
+      : '';
+
     this.resend = apiKey ? new Resend(apiKey) : null;
 
     this.logger.log(`EmailService initialized. From: ${this.from}`);
     this.logger.log(`Resend configured: ${apiKey ? 'YES' : 'NO'}`);
+    this.logger.log(`Logo URL: ${this.logoUrl || '(none — WEB_APP_URL not set)'}`);
   }
 
   async sendReservationCreatedEmail(params: {
@@ -113,6 +120,16 @@ export class EmailService {
       : `${params.adults} adultos`;
 
     const subject = `Reserva recibida · Los Vagones`;
+
+    const logoRow = this.logoUrl
+      ? `
+        <tr>
+          <td style="background-color:#ffffff;padding:28px 48px 0;text-align:center;">
+            <img src="${this.logoUrl}" alt="Los Vagones" width="100" height="100"
+                 style="display:block;margin:0 auto;border:0;width:100px;height:100px;" />
+          </td>
+        </tr>`
+      : '';
 
     const checkoutBlock = params.checkoutUrl
       ? `
@@ -152,6 +169,8 @@ export class EmailService {
       <!-- Card wrapper -->
       <table width="100%" cellpadding="0" cellspacing="0" border="0"
              style="max-width:580px;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+        ${logoRow}
 
         <!-- ── Header ── -->
         <tr>
@@ -457,6 +476,16 @@ losvagonesmex@gmail.com · +52 55 8284 3604`;
 
     const subject = `Pago confirmado — Los Vagones`;
 
+    const logoRow = this.logoUrl
+      ? `
+        <tr>
+          <td style="background-color:#ffffff;padding:28px 48px 0;text-align:center;">
+            <img src="${this.logoUrl}" alt="Los Vagones" width="100" height="100"
+                 style="display:block;margin:0 auto;border:0;width:100px;height:100px;" />
+          </td>
+        </tr>`
+      : '';
+
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -472,6 +501,8 @@ losvagonesmex@gmail.com · +52 55 8284 3604`;
       <!-- Card wrapper -->
       <table width="100%" cellpadding="0" cellspacing="0" border="0"
              style="max-width:580px;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+        ${logoRow}
 
         <!-- ── Header ── -->
         <tr>
