@@ -4,7 +4,7 @@ import { hotelConfig } from '@fraterunion/config';
 const WHATSAPP_URL = process.env.NEXT_PUBLIC_WHATSAPP_BOOKING_URL ?? '';
 
 const LABEL = 'text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--lv-cream)]/32';
-const BODY  = 'text-[0.9rem] leading-[1.75] text-[var(--lv-cream)]/62';
+const BODY  = 'text-[0.84rem] leading-[1.65] text-[var(--lv-cream)]/62';
 
 function WhatsAppIcon() {
   return (
@@ -20,29 +20,29 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t border-white/[0.07] bg-[var(--lv-dark)]">
-      <div className="mx-auto max-w-7xl px-6 py-20 sm:px-10 sm:py-28 lg:px-16 lg:py-32">
+      <div className="mx-auto max-w-7xl px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-18">
 
         {/* Three-column grid */}
-        <div className="grid gap-16 sm:gap-18 lg:grid-cols-3 lg:gap-20">
+        <div className="grid gap-10 sm:gap-12 lg:grid-cols-3 lg:gap-14">
 
           {/* ── Col 1 — Brand ─────────────────────────────────────────── */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-[var(--lv-cream)]/38">
               {hotelConfig.hotelShortName}
             </p>
-            <p className="mt-6 max-w-[22ch] text-[1.05rem] font-light leading-[1.72] tracking-[-0.01em] text-[var(--lv-cream)]/72">
+            <p className="mt-4 max-w-[22ch] text-[0.95rem] font-light leading-[1.65] tracking-[-0.01em] text-[var(--lv-cream)]/72">
               Refugio privado entre bosque,<br />montaña y silencio.
             </p>
           </div>
 
           {/* ── Col 2 — Location + Hours ──────────────────────────────── */}
-          <div className="space-y-9">
+          <div className="space-y-6">
 
             <div>
               <p className={LABEL}>Ubicación</p>
-              <div className={`mt-3 ${BODY}`}>
+              <div className={`mt-2 ${BODY}`}>
                 <p>{hotelConfig.city}, {hotelConfig.region}</p>
-                <p className="mt-0.5 text-[var(--lv-cream)]/42 text-[0.82rem]">
+                <p className="mt-0.5 text-[var(--lv-cream)]/42 text-[0.8rem]">
                   {hotelConfig.locationReference}
                 </p>
               </div>
@@ -50,14 +50,14 @@ export function SiteFooter() {
 
             <div>
               <p className={LABEL}>Dirección</p>
-              <p className={`mt-3 ${BODY}`}>
+              <p className={`mt-2 ${BODY}`}>
                 {hotelConfig.address}
               </p>
             </div>
 
             <div>
               <p className={LABEL}>Horarios</p>
-              <div className={`mt-3 space-y-1 ${BODY}`}>
+              <div className={`mt-2 space-y-0.5 ${BODY}`}>
                 <p>Check-in&nbsp;&nbsp;· {hotelConfig.checkInTime}</p>
                 <p>Check-out · {hotelConfig.checkOutTime}</p>
               </div>
@@ -66,11 +66,11 @@ export function SiteFooter() {
           </div>
 
           {/* ── Col 3 — Contact + CTAs ────────────────────────────────── */}
-          <div className="flex flex-col gap-9">
+          <div className="flex flex-col gap-6">
 
             <div>
               <p className={LABEL}>Contacto</p>
-              <div className={`mt-3 space-y-2 ${BODY}`}>
+              <div className={`mt-2 space-y-1 ${BODY}`}>
                 <a
                   href={phoneHref}
                   className="block transition-colors duration-150 hover:text-[var(--lv-cream)]"
@@ -93,7 +93,7 @@ export function SiteFooter() {
                   href={WHATSAPP_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-[#25D366] px-7 py-3.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#1ebe5d] sm:w-auto sm:justify-start"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#1ebe5d] sm:w-auto sm:justify-start"
                 >
                   <WhatsAppIcon />
                   Reservar por WhatsApp
@@ -101,7 +101,7 @@ export function SiteFooter() {
               )}
               <Link
                 href="/booking"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/[0.28] px-7 py-3.5 text-sm font-medium text-[var(--lv-cream)]/75 transition-all duration-200 hover:border-white/50 hover:text-[var(--lv-cream)] sm:w-auto sm:justify-start"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/[0.28] px-6 py-2.5 text-sm font-medium text-[var(--lv-cream)]/75 transition-all duration-200 hover:border-white/50 hover:text-[var(--lv-cream)] sm:w-auto sm:justify-start"
               >
                 Ver cabañas
                 <span aria-hidden className="text-xs opacity-70">→</span>
@@ -112,7 +112,7 @@ export function SiteFooter() {
         </div>
 
         {/* ── Bottom bar ────────────────────────────────────────────── */}
-        <div className="mt-20 border-t border-white/[0.06] pt-8">
+        <div className="mt-12 border-t border-white/[0.06] pt-6">
           <p className="text-[11px] tracking-[0.1em] text-[var(--lv-cream)]/28">
             © 2026 {hotelConfig.hotelName}. Todos los derechos reservados.
           </p>
