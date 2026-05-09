@@ -280,6 +280,9 @@ export class ReservationsService {
       roomTypeName: reservation.roomType.name,
       checkInDate: reservation.checkInDate.toISOString().slice(0, 10),
       checkOutDate: reservation.checkOutDate.toISOString().slice(0, 10),
+      nights: reservation.nights,
+      adults: reservation.adults,
+      children: reservation.children,
       totalAmount: reservation.totalAmount.toString(),
       currency: reservation.hotel.currency,
     });
