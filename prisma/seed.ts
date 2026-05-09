@@ -136,25 +136,6 @@ async function main() {
     },
   });
 
-  // ── Deactivate demo room types ───────────────────────────────────────────────
-  // Sets status INACTIVE (hidden from availability) and rooms OUT_OF_SERVICE.
-  // Does not delete — avoids foreign-key constraint errors if any reservations exist.
-  for (const slug of ['habitacion-estandar', 'suite-vagon']) {
-    const demo = await prisma.roomType.findUnique({
-      where: { hotelId_slug: { hotelId: hotel.id, slug } },
-    });
-    if (demo) {
-      await prisma.roomType.update({
-        where: { id: demo.id },
-        data: { status: RoomTypeStatus.INACTIVE },
-      });
-      await prisma.room.updateMany({
-        where: { hotelId: hotel.id, roomTypeId: demo.id },
-        data: { status: RoomStatus.OUT_OF_SERVICE },
-      });
-    }
-  }
-
   // ── Real Los Vagones inventory ───────────────────────────────────────────────
   // 6 cabin/wagon types — each is a single unique physical unit.
   // basePrice is nightly in MXN, pre-IVA.
