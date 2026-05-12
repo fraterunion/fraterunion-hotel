@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import { BotAvailabilityService } from './bot.availability';
 import { BotFollowUpService } from './bot.follow-up.service';
 import { BotAnalyticsService } from './bot.analytics.service';
+import { BotKnowledgeService } from './knowledge/bot-knowledge.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -322,6 +323,7 @@ export class BotAiService implements OnModuleInit {
     private readonly botAvailabilityService: BotAvailabilityService,
     private readonly botFollowUpService: BotFollowUpService,
     private readonly analyticsService: BotAnalyticsService,
+    private readonly botKnowledgeService: BotKnowledgeService,
     private readonly prisma: PrismaService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
@@ -401,6 +403,13 @@ export class BotAiService implements OnModuleInit {
     // ── 1b. Idempotency recovery — return existing checkout URL if already completed ──
     if (session.checkoutUrl && isYesReply(input.message)) {
       return `🔥 Ya tienes un link activo para tu reserva:\n\n${session.checkoutUrl}\n\n⚠️ Este link puede expirar. Si ya no funciona, escríbeme y te ayudo.`;
+    }
+
+    // ── 1c. FAQ knowledge lookup — intercept before AI paths ────────────────────
+    // Skip during active checkout so the state machine is not interrupted
+    if (!session.checkoutStep) {
+      const faqAnswer = this.botKnowledgeService.findMatch(input.message);
+      if (faqAnswer) return faqAnswer;
     }
 
     // ── 2. Active checkout flow ─────────────────────────────────────────────────
